@@ -1,9 +1,17 @@
+using Services;
+using Services.Interfaces;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Configure 5-layer dependency injection & PostgreSQL Database
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found in configuration.");
+
+builder.Services.AddBusinessServicesLayer(connectionString);
 
 var app = builder.Build();
 
@@ -16,29 +24,30 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
+// DB Health Check & 5-Layer Integration Test Endpoint
+app.MapGet("/api/test-db", async (ICategoryService categoryService) =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
+    try
+    {
+        var categories = await categoryService.GetAllCategoriesAsync();
+        return Results.Ok(new
+        {
+            Status = "Database connection successful!",
+            Message = "Successfully connected to PostgreSQL and traversed all 5 layers (API -> Services -> Repositories -> DataAccessObjects -> DB)",
+            Count = categories.Count,
+            Categories = categories
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(
+            title: "Database Connection Failed",
+            detail: ex.InnerException?.Message ?? ex.Message,
+            statusCode: StatusCodes.Status500InternalServerError
+        );
+    }
 })
-.WithName("GetWeatherForecast")
+.WithName("TestDatabaseConnection")
 .WithOpenApi();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
