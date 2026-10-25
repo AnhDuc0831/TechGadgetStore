@@ -19,6 +19,9 @@ public static class DependencyInjection
         services.AddDbContext<TechGadgetDbContext>(options =>
             options.UseNpgsql(dataSource));
 
+        // DAOs Registration
+        services.AddScoped<ProfileDAO>();
+
         return services;
     }
 }

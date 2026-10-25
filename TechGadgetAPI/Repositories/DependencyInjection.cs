@@ -10,7 +10,11 @@ public static class DependencyInjection
     public static IServiceCollection AddRepositoriesLayer(this IServiceCollection services, string connectionString)
     {
         services.AddDataAccessLayer(connectionString);
+
+        // Repositories Registration
         services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IProfileRepository, ProfileRepository>();
+
         return services;
     }
 }
