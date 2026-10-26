@@ -118,8 +118,11 @@ class ProfileScreen extends StatelessWidget {
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () {
+              final authProvider = context.read<AuthProvider>();
               Navigator.pop(dialogContext);
-              context.read<AuthProvider>().signOut();
+              // Quay về trang chủ sau khi đăng xuất (khách vẫn xem được sản phẩm)
+              Navigator.of(context).popUntil((route) => route.isFirst);
+              authProvider.signOut();
             },
             child: const Text('Đăng xuất'),
           ),
