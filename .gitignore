@@ -5,3 +5,6 @@
 *.user
 Thumbs.db
 [Dd]esktop.ini
+
+# Local credentials (never commit)
+configTechGadgetSQL.txt

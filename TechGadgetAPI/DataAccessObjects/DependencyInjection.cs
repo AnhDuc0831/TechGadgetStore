@@ -21,6 +21,8 @@ public static class DependencyInjection
 
         // DAOs Registration
         services.AddScoped<ProfileDAO>();
+        services.AddScoped<ProductDAO>();
+        services.AddScoped<BrandDAO>();
 
         return services;
     }

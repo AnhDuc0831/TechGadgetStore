@@ -1,8 +1,8 @@
-using BusinessObjects.Models;
+using BusinessObjects.DTOs;
 
 namespace Services.Interfaces;
 
 public interface ICategoryService
 {
-    Task<List<Category>> GetAllCategoriesAsync();
+    Task<List<CategoryDto>> GetAllCategoriesAsync();
 }

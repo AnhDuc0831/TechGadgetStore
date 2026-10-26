@@ -1,4 +1,4 @@
-using BusinessObjects.Models;
+using BusinessObjects.DTOs;
 using Repositories.Interfaces;
 using Services.Interfaces;
 
@@ -13,8 +13,19 @@ public class CategoryService : ICategoryService
         _categoryRepository = categoryRepository;
     }
 
-    public async Task<List<Category>> GetAllCategoriesAsync()
+    public async Task<List<CategoryDto>> GetAllCategoriesAsync()
     {
-        return await _categoryRepository.GetAllCategoriesAsync();
+        var categories = await _categoryRepository.GetAllCategoriesAsync();
+        return categories
+            .OrderBy(c => c.Name)
+            .Select(c => new CategoryDto
+            {
+                Id = c.Id,
+                Name = c.Name,
+                Slug = c.Slug,
+                Description = c.Description,
+                ImageUrl = c.ImageUrl
+            })
+            .ToList();
     }
 }

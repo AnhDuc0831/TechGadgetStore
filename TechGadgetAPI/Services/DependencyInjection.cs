@@ -14,6 +14,8 @@ public static class DependencyInjection
         // Services Registration
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IProfileService, ProfileService>();
+        services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<IBrandService, BrandService>();
 
         return services;
     }

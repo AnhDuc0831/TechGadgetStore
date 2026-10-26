@@ -14,6 +14,8 @@ public static class DependencyInjection
         // Repositories Registration
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IProfileRepository, ProfileRepository>();
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<IBrandRepository, BrandRepository>();
 
         return services;
     }
