@@ -1,36 +1,29 @@
-import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  // Web Client ID lấy từ Google Cloud Console (dùng để xác thực backend Supabase)
-  static const String? webClientId = null;
+  // Web Client ID lấy từ Google Cloud Console (bắt buộc loại Web Application)
+  static const String webClientId = '';
 
   User? get currentUser => _supabase.auth.currentUser;
   Session? get currentSession => _supabase.auth.currentSession;
   String? get accessToken => _supabase.auth.currentSession?.accessToken;
   Stream<AuthState> get authStateChanges => _supabase.auth.onAuthStateChange;
 
-  /// Đăng nhập bằng Google qua Supabase
+  /// Đăng nhập bằng Google 100% Native trong App (Không qua Web/Trình duyệt)
   Future<AuthResponse> signInWithGoogle() async {
     try {
-      if (kIsWeb) {
-        // Nền tảng Web: sử dụng OAuth redirect
-        await _supabase.auth.signInWithOAuth(
-          OAuthProvider.google,
-          redirectTo: kIsWeb ? null : 'io.supabase.techgadget://login-callback/',
-        );
-        return AuthResponse(session: _supabase.auth.currentSession);
-      }
-
-      // Nền tảng Mobile (Android / iOS): Sử dụng GoogleSignIn lấy idToken
       final GoogleSignIn googleSignIn = GoogleSignIn(
         serverClientId: webClientId,
         scopes: ['email', 'profile'],
       );
 
+      // Xóa phiên cache trước đó để luôn hiển thị hộp thoại chọn tài khoản gốc của Android
+      await googleSignIn.signOut().catchError((_) => null);
+
+      // Kích hoạt hộp thoại Popup gốc Android (trồi lên từ cạnh dưới màn hình)
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
         throw const AuthException('Đã hủy đăng nhập Google.');
@@ -41,14 +34,12 @@ class AuthService {
       final accessToken = googleAuth.accessToken;
 
       if (idToken == null) {
-        // Fallback sang Browser OAuth nếu chưa thiết lập Web Client ID
-        await _supabase.auth.signInWithOAuth(
-          OAuthProvider.google,
-          redirectTo: 'io.supabase.techgadget://login-callback/',
+        throw const AuthException(
+          'Không thể lấy ID Token từ Google. Vui lòng kiểm tra cấu hình Web Client ID.',
         );
-        return AuthResponse(session: _supabase.auth.currentSession);
       }
 
+      // Xác thực trực tiếp qua ID Token với Supabase (hoàn toàn Native trong App)
       return await _supabase.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
@@ -56,7 +47,13 @@ class AuthService {
       );
     } catch (e) {
       if (e is AuthException) rethrow;
-      throw AuthException(e.toString());
+      final err = e.toString();
+      if (err.contains('ApiException: 10') || err.contains('sign_in_failed')) {
+        throw const AuthException(
+          'Lỗi xác thực Google (ApiException 10): Hãy đảm bảo Client ID Android trên Google Cloud đã điền đúng SHA-1 và Package Name.',
+        );
+      }
+      throw AuthException(err);
     }
   }
 

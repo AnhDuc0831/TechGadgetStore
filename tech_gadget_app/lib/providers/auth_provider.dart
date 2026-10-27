@@ -81,7 +81,7 @@ class AuthProvider extends ChangeNotifier {
       _setLoading(false);
       return true;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = e is AuthException ? e.message : e.toString();
       _setLoading(false);
       return false;
     }
@@ -97,7 +97,7 @@ class AuthProvider extends ChangeNotifier {
       _setLoading(false);
       return true;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = e is AuthException ? e.message : e.toString();
       _setLoading(false);
       return false;
     }
@@ -113,7 +113,7 @@ class AuthProvider extends ChangeNotifier {
       _setLoading(false);
       return true;
     } catch (e) {
-      _errorMessage = e.toString();
+      _errorMessage = e is AuthException ? e.message : e.toString();
       _setLoading(false);
       return false;
     }

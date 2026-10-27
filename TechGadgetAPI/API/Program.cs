@@ -65,10 +65,10 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddBusinessServicesLayer(connectionString);
 
 // 4. Configure Supabase JWT Authentication Middleware
-var jwtSecret = builder.Configuration["Jwt:Secret"]
-    ?? throw new InvalidOperationException("Configuration 'Jwt:Secret' is required.");
+var jwtSecret = builder.Configuration["Jwt:Secret"];
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "authenticated";
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+var jwtAuthority = builder.Configuration["Jwt:Authority"] ?? jwtIssuer;
 
 builder.Services.AddAuthentication(options =>
 {
@@ -79,10 +79,17 @@ builder.Services.AddAuthentication(options =>
 {
     options.RequireHttpsMetadata = false;
     options.SaveToken = true;
+
+    // Supabase Cloud OIDC / JWKS (hỗ trợ thuật toán ES256 / RS256)
+    if (!string.IsNullOrEmpty(jwtAuthority) && jwtAuthority.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+    {
+        options.Authority = jwtAuthority;
+        options.MetadataAddress = $"{jwtAuthority.TrimEnd('/')}/.well-known/openid-configuration";
+    }
+
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
         ValidateIssuer = !string.IsNullOrEmpty(jwtIssuer),
         ValidIssuer = jwtIssuer,
         ValidateAudience = !string.IsNullOrEmpty(jwtAudience),
@@ -92,6 +99,12 @@ builder.Services.AddAuthentication(options =>
         NameClaimType = ClaimTypes.NameIdentifier,
         RoleClaimType = ClaimTypes.Role
     };
+
+    // Fallback cho môi trường local mock db dùng HS256 với secret đối xứng
+    if (!string.IsNullOrEmpty(jwtSecret) && (string.IsNullOrEmpty(jwtAuthority) || !jwtAuthority.StartsWith("http", StringComparison.OrdinalIgnoreCase)))
+    {
+        options.TokenValidationParameters.IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
+    }
 });
 
 builder.Services.AddAuthorization();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import 'login_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -120,8 +121,6 @@ class ProfileScreen extends StatelessWidget {
             onPressed: () {
               final authProvider = context.read<AuthProvider>();
               Navigator.pop(dialogContext);
-              // Quay về trang chủ sau khi đăng xuất (khách vẫn xem được sản phẩm)
-              Navigator.of(context).popUntil((route) => route.isFirst);
               authProvider.signOut();
             },
             child: const Text('Đăng xuất'),
@@ -138,17 +137,92 @@ class ProfileScreen extends StatelessWidget {
     final profile = authProvider.userProfile;
     final theme = Theme.of(context);
 
+    // GIAO DIỆN KHI CHƯA ĐĂNG NHẬP (KHÁCH)
+    if (user == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Tài khoản'),
+        ),
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 32.0),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.person_outline_rounded,
+                      size: 60,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Chào mừng bạn đến với\nTech Gadget Store',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Đăng nhập hoặc đăng ký tài khoản để xem thông tin cá nhân, quản lý đơn hàng và nhận các ưu đãi hấp dẫn.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey.shade600,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      icon: const Icon(Icons.login),
+                      label: const Text(
+                        'Đăng nhập / Đăng ký',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const LoginScreen()),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // GIAO DIỆN KHI ĐÃ ĐĂNG NHẬP
     final avatarUrl = profile?.avatarUrl ??
-        user?.userMetadata?['avatar_url'] as String? ??
-        user?.userMetadata?['picture'] as String?;
+        user.userMetadata?['avatar_url'] as String? ??
+        user.userMetadata?['picture'] as String?;
 
     final displayName = profile?.fullName ??
-        user?.userMetadata?['full_name'] as String? ??
-        user?.userMetadata?['name'] as String? ??
+        user.userMetadata?['full_name'] as String? ??
+        user.userMetadata?['name'] as String? ??
         'Khách hàng';
 
-    final email = user?.email ?? 'Chưa cập nhật email';
-    final phone = profile?.phone ?? user?.phone ?? 'Chưa cập nhật số điện thoại';
+    final email = user.email ?? 'Chưa cập nhật email';
+    final phone = profile?.phone ?? user.phone ?? 'Chưa cập nhật số điện thoại';
     final role = profile?.role ?? 'customer';
 
     return Scaffold(
@@ -265,7 +339,7 @@ class ProfileScreen extends StatelessWidget {
                               leading: const Icon(Icons.badge_outlined),
                               title: const Text('Mã người dùng (ID)'),
                               subtitle: Text(
-                                user?.id ?? '',
+                                user.id,
                                 style: const TextStyle(fontSize: 12),
                               ),
                             ),
