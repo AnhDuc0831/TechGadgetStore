@@ -5,7 +5,7 @@ class AuthService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   // Web Client ID lấy từ Google Cloud Console (bắt buộc loại Web Application)
-  static const String webClientId = '';
+  static const String webClientId = '162026746938-4qjstjq54qv3dvgcntkib9p466s2ef1u.apps.googleusercontent.com';
 
   User? get currentUser => _supabase.auth.currentUser;
   Session? get currentSession => _supabase.auth.currentSession;
