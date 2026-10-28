@@ -161,6 +161,7 @@ create table if not exists public.product_variants (
   sku              text not null unique,
   attributes       jsonb not null default '{}'::jsonb,
   price_adjustment numeric(14,2) not null default 0,
+  cost_price       numeric(14,2) not null default 0,
   stock_quantity   integer not null default 0 check (stock_quantity >= 0),
   is_active        boolean not null default true,
   created_at       timestamptz not null default now(),
@@ -212,6 +213,7 @@ create table if not exists public.order_items (
   product_name        text not null,
   sku                 text not null,
   unit_price          numeric(14,2) not null check (unit_price >= 0),
+  cost_price          numeric(14,2) not null default 0 check (cost_price >= 0),
   quantity            integer not null check (quantity > 0),
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now()

@@ -27,6 +27,9 @@ public class OrderItem
     [Column("unit_price", TypeName = "numeric(14,2)")]
     public decimal UnitPrice { get; set; }
 
+    [Column("cost_price", TypeName = "numeric(14,2)")]
+    public decimal CostPrice { get; set; } = 0;
+
     [Column("quantity")]
     public int Quantity { get; set; }
 

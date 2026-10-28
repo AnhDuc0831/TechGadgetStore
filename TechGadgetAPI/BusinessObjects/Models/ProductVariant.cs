@@ -24,6 +24,9 @@ public class ProductVariant
     [Column("price_adjustment", TypeName = "numeric(14,2)")]
     public decimal PriceAdjustment { get; set; } = 0;
 
+    [Column("cost_price", TypeName = "numeric(14,2)")]
+    public decimal CostPrice { get; set; } = 0;
+
     [Column("stock_quantity")]
     public int StockQuantity { get; set; } = 0;
 

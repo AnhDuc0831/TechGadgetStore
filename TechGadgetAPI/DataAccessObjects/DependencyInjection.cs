@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<ProfileDAO>();
         services.AddScoped<ProductDAO>();
         services.AddScoped<BrandDAO>();
+        services.AddScoped<DashboardDAO>();
 
         return services;
     }

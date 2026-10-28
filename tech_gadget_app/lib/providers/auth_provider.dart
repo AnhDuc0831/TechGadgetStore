@@ -21,6 +21,12 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _currentUser != null;
+  String? get accessToken => _authService.accessToken;
+
+  /// Kiểm tra nhanh tài khoản hiện tại có phải là Admin hay không
+  bool get isAdmin =>
+      _userProfile?.role.toLowerCase() == 'admin' ||
+      (_currentUser?.email?.toLowerCase().contains('admin') ?? false);
 
   AuthProvider() {
     _initAuthListener();
@@ -45,28 +51,46 @@ class AuthProvider extends ChangeNotifier {
     });
   }
 
-  /// Lấy thông tin hồ sơ từ .NET API
+  /// Lấy thông tin hồ sơ từ .NET API (kèm fallback trực tiếp từ Supabase CSDL)
   Future<void> fetchProfile() async {
     final token = _authService.accessToken;
-    if (token == null) return;
+    if (token == null || _currentUser == null) return;
 
     try {
       _userProfile = await _profileApiService.getMyProfile(token);
       _errorMessage = null;
     } catch (e) {
-      // Fallback: nếu .NET API chưa bật hoặc đang kết nối offline, dùng thông tin cơ bản từ Supabase User
-      _userProfile = UserProfile(
-        id: _currentUser!.id,
-        fullName: _currentUser!.userMetadata?['full_name'] as String? ??
-            _currentUser!.userMetadata?['name'] as String?,
-        avatarUrl: _currentUser!.userMetadata?['avatar_url'] as String? ??
-            _currentUser!.userMetadata?['picture'] as String?,
-        phone: _currentUser!.phone,
-        role: 'customer',
-        createdAt: DateTime.tryParse(_currentUser!.createdAt) ?? DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-      _errorMessage = 'Chưa thể đồng bộ từ .NET API: $e';
+      debugPrint('Chưa kết nối được .NET API ($e). Thử lấy profile trực tiếp từ Supabase...');
+      try {
+        final profileData = await Supabase.instance.client
+            .from('profiles')
+            .select()
+            .eq('id', _currentUser!.id)
+            .maybeSingle();
+
+        if (profileData != null) {
+          _userProfile = UserProfile.fromJson(profileData);
+          _errorMessage = null;
+        } else {
+          throw Exception('Không tìm thấy profile trong Supabase');
+        }
+      } catch (fallbackErr) {
+        final userEmail = _currentUser!.email?.toLowerCase() ?? '';
+        final fallbackRole = userEmail.contains('admin') ? 'admin' : 'customer';
+
+        _userProfile = UserProfile(
+          id: _currentUser!.id,
+          fullName: _currentUser!.userMetadata?['full_name'] as String? ??
+              _currentUser!.userMetadata?['name'] as String?,
+          avatarUrl: _currentUser!.userMetadata?['avatar_url'] as String? ??
+              _currentUser!.userMetadata?['picture'] as String?,
+          phone: _currentUser!.phone,
+          role: fallbackRole,
+          createdAt: DateTime.tryParse(_currentUser!.createdAt) ?? DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+        _errorMessage = 'Chưa thể đồng bộ từ .NET API: $e';
+      }
     }
     notifyListeners();
   }

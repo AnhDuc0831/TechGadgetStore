@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/product.dart';
+import '../providers/auth_provider.dart';
 import '../services/product_api_service.dart';
 import '../widgets/product_card.dart';
 import '../widgets/product_filter_sheet.dart';
+import 'admin_dashboard_screen.dart';
 import 'product_detail_screen.dart';
 import 'profile_screen.dart';
 
@@ -184,6 +187,19 @@ class _HomeScreenState extends State<HomeScreen> {
         titleSpacing: 12,
         title: _buildSearchField(theme),
         actions: [
+          // Nút Dashboard nhanh cho Admin trên AppBar
+          Consumer<AuthProvider>(
+            builder: (context, auth, _) {
+              if (!auth.isAdmin) return const SizedBox.shrink();
+              return IconButton(
+                tooltip: 'Bảng Điều Khiển Admin (Dashboard)',
+                icon: const Icon(Icons.analytics_outlined),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+                ),
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Hồ sơ cá nhân',
             icon: const Icon(Icons.person_outline),
@@ -203,6 +219,15 @@ class _HomeScreenState extends State<HomeScreen> {
           controller: _scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            // Banner chào mừng và lối tắt vào Admin Dashboard
+            SliverToBoxAdapter(
+              child: Consumer<AuthProvider>(
+                builder: (context, auth, _) {
+                  if (!auth.isAdmin) return const SizedBox.shrink();
+                  return _buildAdminQuickBanner(context);
+                },
+              ),
+            ),
             SliverToBoxAdapter(child: _buildResultsHeader(theme)),
             if (_products.isEmpty && !_isLoading)
               SliverFillRemaining(hasScrollBody: false, child: _buildEmptyState(theme))
@@ -228,6 +253,78 @@ class _HomeScreenState extends State<HomeScreen> {
             SliverToBoxAdapter(child: _buildFooter()),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAdminQuickBanner(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.blueAccent.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.insights_rounded, color: Colors.blueAccent, size: 26),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Quản Trị Viên (Admin)',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Xem thống kê sản phẩm, đơn hàng & lợi nhuận',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.blueAccent,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              visualDensity: VisualDensity.compact,
+            ),
+            icon: const Icon(Icons.arrow_forward, size: 14),
+            label: const Text(
+              'Dashboard',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+            ),
+          ),
+        ],
       ),
     );
   }
