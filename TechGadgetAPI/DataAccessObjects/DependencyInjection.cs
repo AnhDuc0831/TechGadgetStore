@@ -24,6 +24,7 @@ public static class DependencyInjection
         services.AddScoped<ProductDAO>();
         services.AddScoped<BrandDAO>();
         services.AddScoped<DashboardDAO>();
+        services.AddScoped<CartDAO>();
 
         return services;
     }

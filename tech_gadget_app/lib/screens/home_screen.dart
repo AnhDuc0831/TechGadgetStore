@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/product.dart';
 import '../providers/auth_provider.dart';
+import '../providers/cart_provider.dart';
 import '../services/product_api_service.dart';
 import '../widgets/product_card.dart';
 import '../widgets/product_filter_sheet.dart';
 import 'admin_dashboard_screen.dart';
+import 'cart_screen.dart';
 import 'product_detail_screen.dart';
 import 'profile_screen.dart';
 
@@ -196,6 +198,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.analytics_outlined),
                 onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+                ),
+              );
+            },
+          ),
+          // Icon Giỏ hàng kèm badge số lượng
+          Consumer2<AuthProvider, CartProvider>(
+            builder: (context, auth, cart, _) {
+              if (!auth.isAuthenticated) return const SizedBox.shrink();
+              final count = cart.itemCount;
+              return IconButton(
+                tooltip: 'Giỏ hàng',
+                icon: Badge(
+                  isLabelVisible: count > 0,
+                  label: Text('$count'),
+                  child: const Icon(Icons.shopping_cart_outlined),
+                ),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CartScreen()),
                 ),
               );
             },

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/product.dart';
+import '../providers/auth_provider.dart';
+import '../providers/cart_provider.dart';
+import '../screens/cart_screen.dart';
 import '../services/product_api_service.dart';
 import '../utils/formatters.dart';
 import '../widgets/product_card.dart';
@@ -129,11 +133,48 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     });
   }
 
-  void _addToCart() {
-    // TODO: Gọi API thêm vào giỏ hàng với _selectedVariant!.id và _quantity
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Tính năng giỏ hàng đang được phát triển.')),
+  Future<void> _addToCart() async {
+    final variant = _selectedVariant;
+    if (variant == null) return;
+
+    final auth = context.read<AuthProvider>();
+    if (!auth.isAuthenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng đăng nhập để thêm vào giỏ hàng.')),
+      );
+      return;
+    }
+
+    final token = auth.accessToken!;
+    final cartProvider = context.read<CartProvider>();
+
+    final ok = await cartProvider.addItem(
+      token,
+      productVariantId: variant.id,
+      quantity: _quantity,
     );
+
+    if (!mounted) return;
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Đã thêm vào giỏ hàng!'),
+          action: SnackBarAction(
+            label: 'Xem giỏ hàng',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CartScreen()),
+            ),
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(cartProvider.errorMessage ?? 'Không thể thêm vào giỏ hàng.'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
   }
 
   void _toggleFavorite() {

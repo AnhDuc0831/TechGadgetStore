@@ -1,10 +1,14 @@
-using System.Security.Claims;
-using System.Text;
+using DataAccessObjects;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Repositories.Implementations;
+using Repositories.Interfaces;
 using Services;
+using Services.Implementations;
 using Services.Interfaces;
+using System.Security.Claims;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
