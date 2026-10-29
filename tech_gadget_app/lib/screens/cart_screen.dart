@@ -14,6 +14,9 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
+  /// Tập hợp các id item đang được chọn để thanh toán
+  final Set<String> _selectedIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -27,6 +30,15 @@ class _CartScreenState extends State<CartScreen> {
     final token = auth.accessToken;
     if (token == null) return;
     await cartProvider.fetchCart(token);
+
+    // Sau khi tải xong, mặc định chọn tất cả item khả dụng
+    if (!mounted) return;
+    final items = cartProvider.cart.items.where((i) => i.isAvailable);
+    setState(() {
+      _selectedIds
+        ..clear()
+        ..addAll(items.map((i) => i.id));
+    });
   }
 
   Future<void> _removeItem(CartItemModel item) async {
@@ -34,6 +46,8 @@ class _CartScreenState extends State<CartScreen> {
     final cartProvider = context.read<CartProvider>();
     final token = auth.accessToken;
     if (token == null) return;
+
+    setState(() => _selectedIds.remove(item.id));
 
     final ok = await cartProvider.removeItem(token, itemId: item.id);
     if (!mounted) return;
@@ -104,8 +118,45 @@ class _CartScreenState extends State<CartScreen> {
           backgroundColor: Colors.red.shade700,
         ),
       );
+    } else {
+      setState(() => _selectedIds.clear());
     }
   }
+
+  // ── Checkbox helpers ───────────────────────────────────────────────────────
+
+  void _toggleItem(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  void _toggleSelectAll(List<CartItemModel> availableItems) {
+    final allIds = availableItems.map((i) => i.id).toSet();
+    setState(() {
+      if (_selectedIds.containsAll(allIds) && allIds.isNotEmpty) {
+        // Bỏ chọn tất cả
+        _selectedIds.removeAll(allIds);
+      } else {
+        // Chọn tất cả
+        _selectedIds.addAll(allIds);
+      }
+    });
+  }
+
+  // ── Tổng tiền chỉ tính các item được chọn ─────────────────────────────────
+
+  double _selectedTotal(List<CartItemModel> items) {
+    return items
+        .where((i) => i.isAvailable && _selectedIds.contains(i.id))
+        .fold(0, (sum, i) => sum + i.lineTotal);
+  }
+
+  int _selectedCount() => _selectedIds.length;
 
   @override
   Widget build(BuildContext context) {
@@ -223,6 +274,11 @@ class _CartScreenState extends State<CartScreen> {
     final availableItems = cart.items.where((i) => i.isAvailable).toList();
     final unavailableItems = cart.items.where((i) => !i.isAvailable).toList();
 
+    final allAvailableSelected =
+        availableItems.isNotEmpty && _selectedIds.containsAll(availableItems.map((i) => i.id));
+    final someAvailableSelected =
+        !allAvailableSelected && availableItems.any((i) => _selectedIds.contains(i.id));
+
     return RefreshIndicator(
       onRefresh: _fetchCart,
       child: Column(
@@ -232,7 +288,15 @@ class _CartScreenState extends State<CartScreen> {
               padding: const EdgeInsets.symmetric(vertical: 8),
               children: [
                 if (availableItems.isNotEmpty) ...[
-                  _buildSectionHeader('Sản phẩm', availableItems.length, theme),
+                  // Header "Sản phẩm" kèm checkbox chọn tất cả
+                  _buildSectionHeaderWithCheckbox(
+                    'Sản phẩm',
+                    availableItems.length,
+                    theme,
+                    tristate: someAvailableSelected,
+                    checked: allAvailableSelected,
+                    onChanged: (_) => _toggleSelectAll(availableItems),
+                  ),
                   ...availableItems.map((item) => _buildCartItem(item, theme)),
                 ],
                 if (unavailableItems.isNotEmpty) ...[
@@ -250,6 +314,46 @@ class _CartScreenState extends State<CartScreen> {
             ),
           ),
           _buildSummaryBar(cart, theme),
+        ],
+      ),
+    );
+  }
+
+  /// Header có checkbox "Chọn tất cả"
+  Widget _buildSectionHeaderWithCheckbox(
+    String title,
+    int count,
+    ThemeData theme, {
+    required bool tristate,
+    required bool checked,
+    required ValueChanged<bool?> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 16, 4),
+      child: Row(
+        children: [
+          Checkbox(
+            tristate: true,
+            value: tristate ? null : checked,
+            onChanged: onChanged,
+            visualDensity: VisualDensity.compact,
+            activeColor: theme.colorScheme.primary,
+          ),
+          Text(
+            '$title ($count)',
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: Colors.grey.shade700,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            'Chọn tất cả',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.primary,
+            ),
+          ),
+          const SizedBox(width: 4),
         ],
       ),
     );
@@ -275,6 +379,7 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _buildCartItem(CartItemModel item, ThemeData theme, {bool unavailable = false}) {
     final maxQty = item.stockQuantity.clamp(1, 99);
+    final isSelected = _selectedIds.contains(item.id);
 
     return Dismissible(
       key: ValueKey(item.id),
@@ -295,17 +400,32 @@ class _CartScreenState extends State<CartScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
-            color: unavailable ? Colors.red.shade200 : Colors.grey.shade200,
+            color: unavailable
+                ? Colors.red.shade200
+                : (isSelected
+                    ? theme.colorScheme.primary.withValues(alpha: 0.4)
+                    : Colors.grey.shade200),
           ),
         ),
         child: Opacity(
           opacity: unavailable ? 0.6 : 1.0,
           child: Padding(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Ảnh sản phẩm
+                // ── Checkbox chọn sản phẩm ──
+                if (!unavailable)
+                  Checkbox(
+                    value: isSelected,
+                    onChanged: (_) => _toggleItem(item.id),
+                    visualDensity: VisualDensity.compact,
+                    activeColor: theme.colorScheme.primary,
+                  )
+                else
+                  const SizedBox(width: 12),
+
+                // ── Ảnh sản phẩm ──
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: SizedBox(
@@ -315,7 +435,8 @@ class _CartScreenState extends State<CartScreen> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Thông tin sản phẩm
+
+                // ── Thông tin sản phẩm ──
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -386,6 +507,8 @@ class _CartScreenState extends State<CartScreen> {
                     ],
                   ),
                 ),
+
+                const SizedBox(width: 8),
               ],
             ),
           ),
@@ -429,6 +552,9 @@ class _CartScreenState extends State<CartScreen> {
   // ── Summary Bar ───────────────────────────────────────────────────────────
 
   Widget _buildSummaryBar(CartModel cart, ThemeData theme) {
+    final selectedTotal = _selectedTotal(cart.items);
+    final selectedCount = _selectedCount();
+
     return SafeArea(
       child: Container(
         decoration: BoxDecoration(
@@ -451,12 +577,14 @@ class _CartScreenState extends State<CartScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Tổng cộng',
+                    selectedCount > 0
+                        ? 'Tổng ($selectedCount sản phẩm)'
+                        : 'Chưa chọn sản phẩm',
                     style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey.shade600),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    formatVnd(cart.totalAmount),
+                    formatVnd(selectedTotal),
                     style: theme.textTheme.titleLarge?.copyWith(
                       color: Colors.red.shade700,
                       fontWeight: FontWeight.bold,
@@ -467,12 +595,14 @@ class _CartScreenState extends State<CartScreen> {
             ),
             const SizedBox(width: 16),
             FilledButton.icon(
-              onPressed: cart.items.any((i) => i.isAvailable)
+              onPressed: selectedCount > 0
                   ? () {
-                      // TODO: Chuyển sang màn hình Thanh toán (Checkout)
+                      // TODO: Chuyển sang màn hình Thanh toán với _selectedIds
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Tính năng thanh toán đang được phát triển.'),
+                        SnackBar(
+                          content: Text(
+                            'Đặt hàng $selectedCount sản phẩm – tính năng đang phát triển.',
+                          ),
                         ),
                       );
                     }
