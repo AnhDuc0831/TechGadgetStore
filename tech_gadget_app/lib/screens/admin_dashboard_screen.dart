@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/dashboard.dart';
 import '../providers/auth_provider.dart';
 import '../services/dashboard_api_service.dart';
+import 'admin_orders_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -89,6 +90,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Quản lý đơn hàng',
+            icon: const Icon(Icons.receipt_long_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AdminOrdersScreen()),
+              );
+            },
+          ),
+          IconButton(
             tooltip: 'Làm mới',
             icon: const Icon(Icons.refresh),
             onPressed: _isLoading ? null : _loadDashboardData,
@@ -154,6 +164,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           children: [
             // Thanh bộ lọc thời gian
             _buildPeriodSelector(),
+            const SizedBox(height: 16),
+
+            // Nút chuyển nhanh vào Quản lý đơn hàng
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: Colors.indigo.shade100),
+              ),
+              color: Colors.indigo.shade50,
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.receipt_long_outlined, color: Colors.indigo),
+                ),
+                title: const Text(
+                  'Quản lý toàn bộ đơn hàng',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo),
+                ),
+                subtitle: const Text('Xem danh sách, lọc trạng thái & cập nhật tiến trình'),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.indigo),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AdminOrdersScreen()),
+                  );
+                },
+              ),
+            ),
             const SizedBox(height: 16),
 
             // 4 thẻ chỉ số nhanh KPI

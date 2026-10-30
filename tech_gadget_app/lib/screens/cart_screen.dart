@@ -5,6 +5,7 @@ import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../utils/formatters.dart';
 import '../widgets/product_image.dart';
+import 'checkout_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -596,15 +597,19 @@ class _CartScreenState extends State<CartScreen> {
             const SizedBox(width: 16),
             FilledButton.icon(
               onPressed: selectedCount > 0
-                  ? () {
-                      // TODO: Chuyển sang màn hình Thanh toán với _selectedIds
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Đặt hàng $selectedCount sản phẩm – tính năng đang phát triển.',
-                          ),
+                  ? () async {
+                      final selectedItems = cart.items
+                          .where((i) => i.isAvailable && _selectedIds.contains(i.id))
+                          .toList();
+                      if (selectedItems.isEmpty) return;
+
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => CheckoutScreen(selectedItems: selectedItems),
                         ),
                       );
+                      // Tải lại giỏ hàng khi quay lại
+                      _fetchCart();
                     }
                   : null,
               icon: const Icon(Icons.payment_outlined),

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'admin_dashboard_screen.dart';
 import 'login_screen.dart';
+import 'orders_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -389,6 +390,34 @@ class ProfileScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                     ],
+
+                    // Đơn hàng của tôi
+                    Card(
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      child: ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.indigo.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.receipt_long_outlined, color: Colors.indigo),
+                        ),
+                        title: const Text(
+                          'Đơn hàng của tôi',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: const Text('Xem lịch sử mua hàng và trạng thái giao hàng'),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const OrdersScreen()),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
 
                     // Information Card
                     Card(
