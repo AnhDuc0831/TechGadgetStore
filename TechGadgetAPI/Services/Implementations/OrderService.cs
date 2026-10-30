@@ -248,14 +248,45 @@ public class OrderService : IOrderService
             throw new UnauthorizedAccessException("Bạn không có quyền hủy đơn hàng này.");
         }
 
-        if (order.PaymentStatus == PaymentStatus.Paid)
+        // Customer cancel: allow only when order status is Pending AND payment status is Pending/unpaid
+        if (!isAdmin)
         {
-            throw new InvalidOperationException("Không thể hủy đơn hàng đã thanh toán thành công.");
-        }
+            if (order.Status != OrderStatus.Pending)
+            {
+                var canonicalStatus = OrderStatusMapper.ToCanonical(order.Status);
+                var statusMsg = canonicalStatus switch
+                {
+                    CanonicalOrderStatus.Confirmed => "Không thể hủy đơn hàng đã được xác nhận.",
+                    CanonicalOrderStatus.Shipping => "Không thể hủy đơn hàng đang trong quá trình giao hàng.",
+                    CanonicalOrderStatus.Completed => "Không thể hủy đơn hàng đã hoàn thành.",
+                    CanonicalOrderStatus.Cancelled => "Đơn hàng này đã bị hủy trước đó.",
+                    _ => $"Không thể hủy đơn hàng ở trạng thái '{canonicalStatus}'."
+                };
+                throw new InvalidOperationException(statusMsg);
+            }
 
-        if (order.Status == OrderStatus.Cancelled)
+            if (order.PaymentStatus != PaymentStatus.Unpaid && order.PaymentStatus != PaymentStatus.Pending)
+            {
+                var canonicalPaymentStatus = OrderStatusMapper.ToCanonical(order.PaymentStatus);
+                var paymentMsg = canonicalPaymentStatus switch
+                {
+                    CanonicalPaymentStatus.Paid => "Không thể hủy đơn hàng đã thanh toán thành công.",
+                    CanonicalPaymentStatus.Cancelled => "Đơn hàng này đã bị hủy trước đó.",
+                    _ => $"Không thể hủy đơn hàng với trạng thái thanh toán '{canonicalPaymentStatus}'."
+                };
+                throw new InvalidOperationException(paymentMsg);
+            }
+        }
+        else
         {
-            return true;
+            if (order.Status == OrderStatus.Cancelled)
+            {
+                throw new InvalidOperationException("Đơn hàng này đã bị hủy trước đó.");
+            }
+            if (order.PaymentStatus == PaymentStatus.Paid)
+            {
+                throw new InvalidOperationException("Không thể hủy đơn hàng đã thanh toán thành công qua chức năng này.");
+            }
         }
 
         // Cancel on PayOS if applicable
@@ -318,6 +349,16 @@ public class OrderService : IOrderService
         }
         else
         {
+            // Only set PaymentStatus = Failed when the order is still unpaid/pending.
+            // Never downgrade Paid, Cancelled or Expired; log a warning instead.
+            if (order.PaymentStatus == PaymentStatus.Paid ||
+                order.PaymentStatus == PaymentStatus.Cancelled ||
+                order.PaymentStatus == PaymentStatus.Expired)
+            {
+                _logger.LogWarning("Nhận webhook báo thanh toán thất bại (code: {Code}) cho đơn hàng {OrderId} nhưng đơn đã ở trạng thái {PaymentStatus}. Giữ nguyên trạng thái không hạ cấp.", data.Code, order.Id, order.PaymentStatus);
+                return true;
+            }
+
             order.PaymentStatus = PaymentStatus.Failed;
             order.InternalNote = string.IsNullOrEmpty(order.InternalNote)
                 ? $"PayOS thanh toán thất bại với mã code: {data.Code}"
@@ -487,6 +528,11 @@ public class OrderService : IOrderService
         else
         {
             order.Status = OrderStatusMapper.ToDbStatus(newStatus);
+            if (newStatus == CanonicalOrderStatus.Completed && order.PaymentMethod == PaymentMethod.Cod)
+            {
+                order.PaymentStatus = PaymentStatus.Paid;
+                order.PaidAt = DateTimeOffset.UtcNow;
+            }
             await _orderRepo.UpdateOrderAsync(order);
             return MapToAdminDto(order);
         }

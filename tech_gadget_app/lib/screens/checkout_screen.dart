@@ -320,7 +320,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   return 'Vui lòng nhập số điện thoại';
                 }
                 final cleaned = v.trim();
-                final phoneRegex = RegExp(r'^0[3|5|7|8|9][0-9]{8}$');
+                final phoneRegex = RegExp(r'^0[35789][0-9]{8}$');
                 if (!phoneRegex.hasMatch(cleaned)) {
                   return 'Số điện thoại không hợp lệ (10 số, bắt đầu bằng 03, 05, 07, 08, 09)';
                 }

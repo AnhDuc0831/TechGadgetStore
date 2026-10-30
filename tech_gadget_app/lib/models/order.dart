@@ -263,12 +263,10 @@ class OrderModel {
   bool get isPayOS => paymentMethod.toLowerCase() == 'payos';
   bool get isCod => paymentMethod.toLowerCase() == 'cod';
 
-  /// Khách hàng chỉ có thể hủy đơn khi chưa thanh toán và đơn chưa hủy
+  /// Khách hàng chỉ có thể hủy đơn khi order status là Pending VÀ paymentStatus là Pending
   bool get canCancel =>
-      paymentStatusEnum == PaymentStatusEnum.pending &&
-      statusEnum != OrderStatusEnum.cancelled &&
-      statusEnum != OrderStatusEnum.completed &&
-      statusEnum != OrderStatusEnum.shipping;
+      statusEnum == OrderStatusEnum.pending &&
+      paymentStatusEnum == PaymentStatusEnum.pending;
 
   /// Đơn PayOS chưa thanh toán có thể thanh toán lại nếu có checkoutUrl
   bool get canReopenPayment =>

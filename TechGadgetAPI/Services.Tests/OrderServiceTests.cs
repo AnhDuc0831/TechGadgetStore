@@ -880,4 +880,152 @@ public class OrderServiceTests
         Assert.NotNull(order.PaidAt);
         _orderRepoMock.Verify(r => r.UpdateOrderAsync(order), Times.Once);
     }
+
+    [Fact]
+    public async Task CustomerCancel_CodOrderInShipping_ThrowsInvalidOperationException_NeverRestoresStock()
+    {
+        // Arrange: COD order already shipped
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var order = new Order
+        {
+            Id = orderId,
+            UserId = userId,
+            PaymentMethod = PaymentMethod.Cod,
+            PaymentStatus = PaymentStatus.Unpaid,
+            Status = OrderStatus.Shipped, // In shipping
+            TotalAmount = 500000m
+        };
+
+        _orderRepoMock.Setup(r => r.GetOrderByIdAsync(orderId)).ReturnsAsync(order);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _orderService.CancelOrderAsync(orderId, userId, isAdmin: false));
+
+        Assert.Contains("Không thể hủy đơn hàng đang trong quá trình giao hàng", ex.Message);
+        _orderRepoMock.Verify(r => r.CancelOrderAndRestoreStockAsync(It.IsAny<Guid>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(OrderStatus.Processing, "Không thể hủy đơn hàng đã được xác nhận")]
+    [InlineData(OrderStatus.Delivered, "Không thể hủy đơn hàng đã hoàn thành")]
+    [InlineData(OrderStatus.Cancelled, "Đơn hàng này đã bị hủy trước đó")]
+    public async Task CustomerCancel_DisallowedOrderStatuses_ThrowsWithClearVietnameseMessage(OrderStatus status, string expectedMessagePart)
+    {
+        // Arrange
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var order = new Order
+        {
+            Id = orderId,
+            UserId = userId,
+            PaymentMethod = PaymentMethod.PayOS,
+            PaymentStatus = PaymentStatus.Unpaid,
+            Status = status
+        };
+
+        _orderRepoMock.Setup(r => r.GetOrderByIdAsync(orderId)).ReturnsAsync(order);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _orderService.CancelOrderAsync(orderId, userId, isAdmin: false));
+
+        Assert.Contains(expectedMessagePart, ex.Message);
+        _orderRepoMock.Verify(r => r.CancelOrderAndRestoreStockAsync(It.IsAny<Guid>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CustomerCancel_PaidOrder_ThrowsWithClearVietnameseMessage()
+    {
+        // Arrange
+        var orderId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var order = new Order
+        {
+            Id = orderId,
+            UserId = userId,
+            PaymentMethod = PaymentMethod.PayOS,
+            PaymentStatus = PaymentStatus.Paid,
+            Status = OrderStatus.Pending
+        };
+
+        _orderRepoMock.Setup(r => r.GetOrderByIdAsync(orderId)).ReturnsAsync(order);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _orderService.CancelOrderAsync(orderId, userId, isAdmin: false));
+
+        Assert.Contains("Không thể hủy đơn hàng đã thanh toán thành công", ex.Message);
+        _orderRepoMock.Verify(r => r.CancelOrderAndRestoreStockAsync(It.IsAny<Guid>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Webhook_FailureBranch_AlreadyPaidOrder_LeavesItPaid_NeverDowngrades()
+    {
+        // Arrange: webhook reports failure (code != "00") for an order that is already Paid
+        var orderCode = 1730000009999L;
+        var webhook = new Webhook();
+        var webhookData = new WebhookData
+        {
+            OrderCode = orderCode,
+            Amount = 500000,
+            Code = "01", // Failure code
+            Reference = "REF_FAIL"
+        };
+
+        var alreadyPaidOrder = new Order
+        {
+            Id = Guid.NewGuid(),
+            PayOSOrderCode = orderCode,
+            TotalAmount = 500000m,
+            PaymentStatus = PaymentStatus.Paid, // Already paid!
+            Status = OrderStatus.Processing
+        };
+
+        _payOSServiceMock
+            .Setup(p => p.VerifyWebhookDataAsync(webhook))
+            .ReturnsAsync(webhookData);
+
+        _orderRepoMock
+            .Setup(r => r.GetOrderByOrderCodeAsync(orderCode))
+            .ReturnsAsync(alreadyPaidOrder);
+
+        // Act
+        var result = await _orderService.ProcessPayOSWebhookAsync(webhook);
+
+        // Assert: returns true, order status is NOT downgraded, update is never called
+        Assert.True(result);
+        Assert.Equal(PaymentStatus.Paid, alreadyPaidOrder.PaymentStatus);
+        _orderRepoMock.Verify(r => r.UpdateOrderAsync(It.IsAny<Order>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AdminUpdateStatus_CodOrder_ToCompleted_SetsPaymentStatusPaidAndPaidAtNow()
+    {
+        // Arrange: COD order in Shipping
+        var orderId = Guid.NewGuid();
+        var order = new Order
+        {
+            Id = orderId,
+            PaymentMethod = PaymentMethod.Cod,
+            PaymentStatus = PaymentStatus.Unpaid,
+            Status = OrderStatus.Shipped // Shipping
+        };
+
+        _orderRepoMock.Setup(r => r.GetOrderByIdAsync(orderId)).ReturnsAsync(order);
+        _orderRepoMock.Setup(r => r.UpdateOrderAsync(It.IsAny<Order>())).Returns(Task.CompletedTask);
+
+        // Act: Admin marks Completed
+        var result = await _orderService.UpdateOrderStatusAsync(orderId, CanonicalOrderStatus.Completed);
+
+        // Assert: PaymentStatus is Paid, PaidAt is now
+        Assert.NotNull(result);
+        Assert.Equal(CanonicalOrderStatus.Completed, result.Status);
+        Assert.Equal(CanonicalPaymentStatus.Paid, result.PaymentStatus);
+        Assert.NotNull(result.PaidAt);
+        Assert.Equal(PaymentStatus.Paid, order.PaymentStatus);
+        Assert.NotNull(order.PaidAt);
+        _orderRepoMock.Verify(r => r.UpdateOrderAsync(order), Times.Once);
+    }
 }

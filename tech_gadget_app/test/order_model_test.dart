@@ -179,6 +179,62 @@ void main() {
       expect(pendingResult.isPaid, isFalse);
       expect(pendingResult.isPending, isTrue);
     });
+
+    test('canCancel returns true ONLY when status is Pending AND paymentStatus is Pending', () {
+      OrderModel createOrder({required String status, required String paymentStatus}) {
+        return OrderModel(
+          id: 'test-cancel-id',
+          status: status,
+          paymentMethod: 'Cod',
+          paymentStatus: paymentStatus,
+          totalAmount: 200000,
+          shippingFee: 30000,
+          shippingAddress: 'Address',
+          createdAt: DateTime.now(),
+          items: [],
+        );
+      }
+
+      // Allowed
+      expect(createOrder(status: 'Pending', paymentStatus: 'Pending').canCancel, isTrue);
+
+      // Disallowed order statuses (even if payment is pending)
+      expect(createOrder(status: 'Confirmed', paymentStatus: 'Pending').canCancel, isFalse);
+      expect(createOrder(status: 'Shipping', paymentStatus: 'Pending').canCancel, isFalse);
+      expect(createOrder(status: 'Completed', paymentStatus: 'Pending').canCancel, isFalse);
+      expect(createOrder(status: 'Cancelled', paymentStatus: 'Pending').canCancel, isFalse);
+
+      // Disallowed payment statuses (even if status is pending)
+      expect(createOrder(status: 'Pending', paymentStatus: 'Paid').canCancel, isFalse);
+      expect(createOrder(status: 'Pending', paymentStatus: 'Failed').canCancel, isFalse);
+      expect(createOrder(status: 'Pending', paymentStatus: 'Cancelled').canCancel, isFalse);
+      expect(createOrder(status: 'Pending', paymentStatus: 'Expired').canCancel, isFalse);
+    });
+
+    test('VN phone regex ^0[35789][0-9]{8}\$ correctly validates Vietnamese phone numbers', () {
+      final regex = RegExp(r'^0[35789][0-9]{8}$');
+
+      // Valid phone numbers (10 digits starting with 03, 05, 07, 08, 09)
+      expect(regex.hasMatch('0987654321'), isTrue);
+      expect(regex.hasMatch('0323456789'), isTrue);
+      expect(regex.hasMatch('0512345678'), isTrue);
+      expect(regex.hasMatch('0789123456'), isTrue);
+      expect(regex.hasMatch('0898765432'), isTrue);
+
+      // Invalid prefixes
+      expect(regex.hasMatch('0123456789'), isFalse);
+      expect(regex.hasMatch('0412345678'), isFalse);
+      expect(regex.hasMatch('0612345678'), isFalse);
+
+      // Invalid characters or pipe characters
+      expect(regex.hasMatch('0|87654321'), isFalse);
+      expect(regex.hasMatch('098765432a'), isFalse);
+
+      // Invalid length
+      expect(regex.hasMatch('098765432'), isFalse); // 9 digits
+      expect(regex.hasMatch('09876543210'), isFalse); // 11 digits
+      expect(regex.hasMatch(''), isFalse);
+    });
   });
 }
 
