@@ -6,5 +6,6 @@ public enum PaymentMethod
     BankTransfer,
     Momo,
     Vnpay,
-    CreditCard
+    CreditCard,
+    PayOS
 }

@@ -33,8 +33,29 @@ public class Order
     [Column("payment_status")]
     public PaymentStatus PaymentStatus { get; set; } = PaymentStatus.Unpaid;
 
+    [Column("shipping_name")]
+    public string? ShippingName { get; set; }
+
+    [Column("shipping_phone")]
+    public string? ShippingPhone { get; set; }
+
+    [Column("payos_order_code")]
+    public long? PayOSOrderCode { get; set; }
+
+    [Column("payment_link_id")]
+    public string? PaymentLinkId { get; set; }
+
+    [Column("checkout_url")]
+    public string? CheckoutUrl { get; set; }
+
+    [Column("paid_at")]
+    public DateTimeOffset? PaidAt { get; set; }
+
     [Column("note")]
     public string? Note { get; set; }
+
+    [Column("internal_note")]
+    public string? InternalNote { get; set; }
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

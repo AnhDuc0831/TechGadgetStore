@@ -26,9 +26,13 @@ public class DashboardDAO
             .Where(o => o.CreatedAt >= startDate && o.CreatedAt <= endDate)
             .ToListAsync();
 
-        // 2. Successful / Paid orders for Revenue and Profit calculation
+        // 2. Successful / Paid orders for Revenue and Profit calculation:
+        // Count only Paid orders (PayOS) and Completed/Delivered orders (COD)
         var successfulOrders = ordersInPeriod
-            .Where(o => o.Status == OrderStatus.Delivered || o.PaymentStatus == PaymentStatus.Paid)
+            .Where(o =>
+                (o.PaymentMethod == PaymentMethod.PayOS && o.PaymentStatus == PaymentStatus.Paid) ||
+                (o.PaymentMethod == PaymentMethod.Cod && (o.Status == OrderStatus.Completed || o.Status == OrderStatus.Delivered)) ||
+                (o.PaymentMethod != PaymentMethod.PayOS && o.PaymentMethod != PaymentMethod.Cod && (o.Status == OrderStatus.Completed || o.Status == OrderStatus.Delivered || o.PaymentStatus == PaymentStatus.Paid)))
             .ToList();
 
         var totalRevenue = successfulOrders.Sum(o => o.TotalAmount);

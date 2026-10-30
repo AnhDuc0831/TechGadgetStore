@@ -76,6 +76,7 @@ public class TechGadgetDbContext : DbContext
         {
             entity.HasIndex(e => e.UserId);
             entity.HasIndex(e => e.Status);
+            entity.HasIndex(e => e.PayOSOrderCode).IsUnique();
         });
 
         modelBuilder.Entity<OrderItem>(entity =>

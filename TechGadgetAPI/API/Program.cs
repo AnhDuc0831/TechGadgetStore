@@ -13,7 +13,11 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Controllers & API Documentation
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure CORS for Flutter Web / Desktop / Mobile
@@ -65,6 +69,11 @@ builder.Services.AddSwaggerGen(c =>
 // 3. Configure 5-layer dependency injection & PostgreSQL Database
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found in configuration.");
+
+builder.Services.Configure<BusinessObjects.DTOs.PayOSOptions>(
+    builder.Configuration.GetSection(BusinessObjects.DTOs.PayOSOptions.SectionName));
+builder.Services.Configure<BusinessObjects.DTOs.ShippingOptions>(
+    builder.Configuration.GetSection(BusinessObjects.DTOs.ShippingOptions.SectionName));
 
 builder.Services.AddBusinessServicesLayer(connectionString);
 

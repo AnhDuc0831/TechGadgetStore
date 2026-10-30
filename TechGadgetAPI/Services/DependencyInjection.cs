@@ -18,6 +18,9 @@ public static class DependencyInjection
         services.AddScoped<IBrandService, BrandService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<ICartService, CartService>();
+        services.AddScoped<IPayOSService, PayOSService>();
+        services.AddScoped<IOrderService, OrderService>();
+        services.AddHostedService<PayOSOrderCleanupHostedService>();
 
         return services;
     }
