@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
 double _toDouble(dynamic value) => (value as num?)?.toDouble() ?? 0.0;
@@ -268,6 +269,9 @@ class OrderModel {
       statusEnum == OrderStatusEnum.pending &&
       paymentStatusEnum == PaymentStatusEnum.pending;
 
+  /// Khách hàng có thể xác nhận đã nhận hàng khi trạng thái là Đang giao hàng (Shipping)
+  bool get canConfirmReceived => statusEnum == OrderStatusEnum.shipping;
+
   /// Đơn PayOS chưa thanh toán có thể thanh toán lại nếu có checkoutUrl
   bool get canReopenPayment =>
       isPayOS &&
@@ -275,6 +279,19 @@ class OrderModel {
       statusEnum != OrderStatusEnum.cancelled &&
       checkoutUrl != null &&
       checkoutUrl!.isNotEmpty;
+
+  /// Địa chỉ giao hàng được định dạng tự nhiên, loại bỏ chuỗi JSON nếu có
+  String get formattedShippingAddress {
+    final parsed = ShippingAddressHelper.parse(shippingAddress);
+    if (parsed.address.isNotEmpty) {
+      return parsed.address;
+    }
+    final trimmed = shippingAddress.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      return 'Chưa cập nhật địa chỉ';
+    }
+    return shippingAddress.isEmpty ? 'Chưa cập nhật địa chỉ' : shippingAddress;
+  }
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     DateTime parseDate(dynamic val) {
@@ -300,6 +317,29 @@ class OrderModel {
         .map((e) => OrderItemModel.fromJson(e as Map<String, dynamic>))
         .toList();
 
+    String? shippingName = json['shippingName'] as String? ??
+        json['shipping_name'] as String? ??
+        json['recipientName'] as String? ??
+        json['recipient_name'] as String? ??
+        json['receiverName'] as String? ??
+        json['customerName'] as String?;
+
+    String? shippingPhone = json['shippingPhone'] as String? ??
+        json['shipping_phone'] as String? ??
+        json['recipientPhone'] as String? ??
+        json['phone'] as String? ??
+        json['phoneNumber'] as String?;
+
+    final parsedShipping = ShippingAddressHelper.parse(
+      json['shippingAddress'] ?? json['shipping_address'],
+      defaultName: shippingName,
+      defaultPhone: shippingPhone,
+    );
+
+    shippingName = parsedShipping.name;
+    shippingPhone = parsedShipping.phone;
+    final shippingAddress = parsedShipping.address;
+
     return OrderModel(
       id: json['id'] as String? ?? '',
       status: json['status'] as String? ?? 'Pending',
@@ -307,9 +347,9 @@ class OrderModel {
       paymentStatus: json['paymentStatus'] as String? ?? 'Pending',
       totalAmount: _toDouble(json['totalAmount']),
       shippingFee: _toDouble(json['shippingFee']),
-      shippingName: json['shippingName'] as String?,
-      shippingPhone: json['shippingPhone'] as String?,
-      shippingAddress: json['shippingAddress'] as String? ?? '',
+      shippingName: shippingName,
+      shippingPhone: shippingPhone,
+      shippingAddress: shippingAddress,
       note: json['note'] as String?,
       createdAt: parseDate(json['createdAt']),
       paidAt: parseNullableDate(json['paidAt']),
@@ -552,5 +592,190 @@ class PagedOrders {
       totalPages: json['totalPages'] as int? ?? 1,
     );
   }
+}
+
+/// Helper định dạng và trích xuất thông tin địa chỉ nhận hàng tự nhiên
+class ShippingAddressHelper {
+  static ParsedShippingInfo parse(dynamic raw, {String? defaultName, String? defaultPhone}) {
+    String? name = defaultName;
+    String? phone = defaultPhone;
+    String address = '';
+
+    if (raw == null) {
+      return ParsedShippingInfo(name: name, phone: phone, address: address);
+    }
+
+    dynamic current = raw;
+
+    // Giải mã nếu dữ liệu là chuỗi JSON hoặc chuỗi bị escape
+    if (current is String) {
+      final trimmed = current.trim();
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+          (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+          (trimmed.startsWith('"') && trimmed.endsWith('"'))) {
+        try {
+          current = jsonDecode(trimmed);
+          if (current is String) {
+            final secondTrimmed = current.trim();
+            if (secondTrimmed.startsWith('{') && secondTrimmed.endsWith('}')) {
+              current = jsonDecode(secondTrimmed);
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (current is Map) {
+      // 1. Tên người nhận
+      name ??= _extractString(current, [
+        'recipient_name',
+        'recipientName',
+        'receiver_name',
+        'receiverName',
+        'name',
+        'full_name',
+        'fullName',
+        'customer_name',
+        'customerName',
+        'shipping_name',
+        'shippingName',
+      ]);
+
+      // 2. Số điện thoại
+      phone ??= _extractString(current, [
+        'phone',
+        'phoneNumber',
+        'phone_number',
+        'sdt',
+        'mobile',
+        'telephone',
+        'recipient_phone',
+        'recipientPhone',
+        'shipping_phone',
+        'shippingPhone',
+      ]);
+
+      // 3. Địa chỉ
+      address = _formatAddressFromMap(current);
+    } else if (current is String) {
+      address = current.trim();
+    } else {
+      address = current.toString();
+    }
+
+    // Nếu address vẫn còn dạng JSON (do lồng nhau), giải mã lần nữa
+    if (address.trim().startsWith('{') && address.trim().endsWith('}')) {
+      try {
+        final nested = jsonDecode(address.trim());
+        if (nested is Map) {
+          final formatted = _formatAddressFromMap(nested);
+          if (formatted.isNotEmpty) address = formatted;
+        }
+      } catch (_) {}
+    }
+
+    return ParsedShippingInfo(
+      name: name?.trim().isEmpty == true ? null : name?.trim(),
+      phone: phone?.trim().isEmpty == true ? null : phone?.trim(),
+      address: address.trim(),
+    );
+  }
+
+  static String? _extractString(Map map, List<String> candidateKeys) {
+    for (final key in candidateKeys) {
+      if (map.containsKey(key) && map[key] != null) {
+        final val = map[key].toString().trim();
+        if (val.isNotEmpty) return val;
+      }
+    }
+    return null;
+  }
+
+  static String _formatAddressFromMap(Map map) {
+    // Kiểm tra nếu có trường address trực tiếp
+    final directVal = map['address'] ??
+        map['shipping_address'] ??
+        map['shippingAddress'] ??
+        map['full_address'] ??
+        map['fullAddress'] ??
+        map['dia_chi'];
+
+    if (directVal is Map) {
+      return _formatAddressFromMap(directVal);
+    }
+
+    String? street = directVal?.toString().trim();
+    if (street == null || street.isEmpty || (street.startsWith('{') && street.endsWith('}'))) {
+      street = _extractString(map, [
+        'street',
+        'street_address',
+        'streetAddress',
+        'address_line_1',
+        'address_line1',
+        'addressLine1',
+        'line1',
+        'detail',
+        'detail_address',
+        'detailAddress',
+        'so_nha',
+        'house_number',
+      ]);
+    }
+
+    final ward = _extractString(map, ['ward', 'phuong', 'xa', 'sub_district', 'subDistrict']);
+    final district = _extractString(map, ['district', 'quan', 'huyen']);
+    final city = _extractString(map, ['city', 'province', 'tinh', 'thanh_pho', 'thanhPho', 'state']);
+    final country = _extractString(map, ['country', 'quoc_gia']);
+
+    final parts = <String>[];
+    if (street != null && street.isNotEmpty && !street.startsWith('{')) parts.add(street);
+    if (ward != null && ward.isNotEmpty && !parts.any((p) => p.contains(ward))) parts.add(ward);
+    if (district != null && district.isNotEmpty && !parts.any((p) => p.contains(district))) parts.add(district);
+    if (city != null && city.isNotEmpty && !parts.any((p) => p.contains(city))) parts.add(city);
+    if (country != null && country.isNotEmpty && !parts.any((p) => p.contains(country))) parts.add(country);
+
+    if (parts.isNotEmpty) {
+      return parts.join(', ');
+    }
+
+    // Dự phòng: gom các trường địa chỉ còn lại bỏ qua các khóa meta người nhận
+    const metaKeys = {
+      'recipient_name', 'recipientname', 'receiver_name', 'receivername', 'name', 'full_name', 'fullname',
+      'customer_name', 'customername', 'shipping_name', 'shippingname',
+      'phone', 'phonenumber', 'phone_number', 'sdt', 'mobile', 'telephone',
+      'recipient_phone', 'recipientphone', 'shipping_phone', 'shippingphone',
+      'id', 'status', 'email', 'note', 'created_at', 'updated_at'
+    };
+
+    final fallbackParts = <String>[];
+    map.forEach((k, v) {
+      final keyLower = k.toString().toLowerCase().replaceAll('_', '');
+      if (!metaKeys.contains(keyLower) && v != null) {
+        if (v is Map) {
+          final nested = _formatAddressFromMap(v);
+          if (nested.isNotEmpty) fallbackParts.add(nested);
+        } else {
+          final str = v.toString().trim();
+          if (str.isNotEmpty && !str.startsWith('{')) {
+            fallbackParts.add(str);
+          }
+        }
+      }
+    });
+
+    if (fallbackParts.isNotEmpty) {
+      return fallbackParts.join(', ');
+    }
+
+    return '';
+  }
+}
+
+class ParsedShippingInfo {
+  final String? name;
+  final String? phone;
+  final String address;
+
+  ParsedShippingInfo({this.name, this.phone, required this.address});
 }
 

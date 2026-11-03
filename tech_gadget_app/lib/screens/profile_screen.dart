@@ -4,6 +4,8 @@ import '../providers/auth_provider.dart';
 import 'admin_dashboard_screen.dart';
 import 'login_screen.dart';
 import 'orders_screen.dart';
+import '../widgets/customer_ai_chat_modal.dart';
+import '../widgets/admin_analytics_chat_modal.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -388,6 +390,74 @@ class ProfileScreen extends StatelessWidget {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 12),
+
+                      // Nút mở AI Cố Vấn Quản Trị & Đọc Thống Kê CSDL
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF1E1B4B), Color(0xFF312E81)],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () {
+                              AdminAnalyticsChatModal.show(context: context);
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.purple.withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Icon(Icons.auto_awesome, color: Color(0xFFC084FC), size: 28),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  const Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'AI Cố Vấn Quản Trị CSDL',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        SizedBox(height: 2),
+                                        Text(
+                                          'Đọc dữ liệu DB, phân tích doanh thu & tồn kho',
+                                          style: TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 16),
                     ],
 
@@ -414,6 +484,32 @@ class ProfileScreen extends StatelessWidget {
                           Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const OrdersScreen()),
                           );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Trợ lý AI Tư vấn Mua sắm (24/7)
+                    Card(
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      child: ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.smart_toy_rounded, color: Color(0xFF2563EB)),
+                        ),
+                        title: const Text(
+                          'Trợ lý AI Tư vấn Mua sắm (24/7)',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: const Text('Tư vấn chọn mua máy, so sánh cấu hình & giải đáp thắc mắc'),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        onTap: () {
+                          CustomerAiChatModal.show(context: context);
                         },
                       ),
                     ),

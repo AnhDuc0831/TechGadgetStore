@@ -6,6 +6,8 @@ import '../models/dashboard.dart';
 import '../providers/auth_provider.dart';
 import '../services/dashboard_api_service.dart';
 import 'admin_orders_screen.dart';
+import 'admin_products_screen.dart';
+import '../widgets/admin_analytics_chat_modal.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -77,18 +79,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       appBar: AppBar(
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               'Thống Kê Tổng Quan',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             Text(
               'Bảng điều khiển Quản trị viên (Admin)',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.normal),
             ),
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'AI Cố vấn Thống kê CSDL',
+            icon: const Icon(Icons.auto_awesome, color: Color(0xFF60A5FA)),
+            onPressed: () => AdminAnalyticsChatModal.show(context: context),
+          ),
+          IconButton(
+            tooltip: 'Quản lý sản phẩm',
+            icon: const Icon(Icons.inventory_2_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AdminProductsScreen()),
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Quản lý đơn hàng',
             icon: const Icon(Icons.receipt_long_outlined),
@@ -106,6 +127,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ],
       ),
       body: _buildBody(theme),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => AdminAnalyticsChatModal.show(context: context),
+        backgroundColor: const Color(0xFF4338CA),
+        foregroundColor: Colors.white,
+        elevation: 4,
+        icon: const Icon(Icons.auto_awesome),
+        label: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Hỏi AI Thống Kê',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            SizedBox(width: 4),
+            CircleAvatar(radius: 3.5, backgroundColor: Color(0xFF38BDF8)),
+          ],
+        ),
+      ),
     );
   }
 
@@ -125,7 +164,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     if (_errorMessage != null) {
       return Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -165,6 +204,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             // Thanh bộ lọc thời gian
             _buildPeriodSelector(),
             const SizedBox(height: 16),
+
+            // Nút chuyển nhanh vào Quản lý sản phẩm
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: Colors.blue.shade100),
+              ),
+              color: Colors.blue.shade50,
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.inventory_2_outlined, color: Colors.blue),
+                ),
+                title: const Text(
+                  'Quản lý sản phẩm',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+                ),
+                subtitle: const Text('Thêm, sửa, xoá mềm, tìm kiếm và phân loại sản phẩm'),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.blue),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AdminProductsScreen()),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
 
             // Nút chuyển nhanh vào Quản lý đơn hàng
             Card(
@@ -406,30 +477,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          const Text(
+            'Biểu Đồ Doanh Thu & Lợi Nhuận',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            'So sánh dòng tiền bán hàng và lợi nhuận gộp',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 16,
+            runSpacing: 8,
             children: [
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Biểu Đồ Doanh Thu & Lợi Nhuận',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    'So sánh dòng tiền bán hàng và lợi nhuận gộp',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  _buildLegendIndicator(const Color(0xFF2563EB), 'Doanh thu'),
-                  const SizedBox(width: 12),
-                  _buildLegendIndicator(const Color(0xFF16A34A), 'Lợi nhuận'),
-                ],
-              ),
+              _buildLegendIndicator(const Color(0xFF2563EB), 'Doanh thu'),
+              _buildLegendIndicator(const Color(0xFF16A34A), 'Lợi nhuận'),
             ],
           ),
           const SizedBox(height: 24),
@@ -446,12 +509,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _buildLineChart(List<ChartDataPoint> points) {
     double maxVal = 0;
+    double minVal = 0;
     for (var p in points) {
       if (p.revenue > maxVal) maxVal = p.revenue;
       if (p.profit > maxVal) maxVal = p.profit;
+      if (p.revenue < minVal) minVal = p.revenue;
+      if (p.profit < minVal) minVal = p.profit;
     }
-    if (maxVal == 0) maxVal = 10000000;
-    maxVal = maxVal * 1.15; // Padding đỉnh đồ thị
+    if (maxVal <= 0 && minVal >= 0) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.show_chart, size: 40, color: Colors.grey.shade400),
+            const SizedBox(height: 8),
+            Text(
+              'Chưa phát sinh doanh thu trong khoảng thời gian này',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    }
+    maxVal = maxVal > 0 ? maxVal * 1.15 : 100000;
+    final minY = minVal < 0 ? minVal * 1.15 : 0.0;
+    final yRange = maxVal - minY;
+    final yInterval = (yRange / 4).clamp(1.0, double.infinity);
 
     final spotsRevenue = <FlSpot>[];
     final spotsProfit = <FlSpot>[];
@@ -465,12 +548,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       LineChartData(
         minX: 0,
         maxX: (points.length - 1).toDouble().clamp(1.0, double.infinity),
-        minY: 0,
+        minY: minY,
         maxY: maxVal,
+        clipData: const FlClipData.all(),
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
-          horizontalInterval: maxVal / 4,
+          horizontalInterval: yInterval,
           getDrawingHorizontalLine: (value) => FlLine(
             color: Colors.grey.shade100,
             strokeWidth: 1,
@@ -483,7 +567,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 46,
-              interval: maxVal / 4,
+              interval: yInterval,
               getTitlesWidget: (value, meta) {
                 if (value == 0) return const SizedBox.shrink();
                 return Text(
@@ -873,6 +957,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _buildLegendIndicator(Color color, String text) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 10,
@@ -892,10 +977,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     switch (status.toLowerCase()) {
       case 'pending':
         return const Color(0xFFF59E0B); // Amber
+      case 'confirmed':
       case 'processing':
         return const Color(0xFF3B82F6); // Blue
+      case 'shipping':
       case 'shipped':
         return const Color(0xFF06B6D4); // Cyan
+      case 'completed':
       case 'delivered':
         return const Color(0xFF10B981); // Emerald
       case 'cancelled':
@@ -916,12 +1004,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   String _formatShortNumber(double value) {
-    if (value >= 1000000000) {
-      return '${(value / 1000000000).toStringAsFixed(1)}B';
-    } else if (value >= 1000000) {
-      return '${(value / 1000000).toStringAsFixed(0)}M';
-    } else if (value >= 1000) {
-      return '${(value / 1000).toStringAsFixed(0)}k';
+    final absVal = value.abs();
+    final sign = value < 0 ? '-' : '';
+    if (absVal >= 1000000000) {
+      return '$sign${(absVal / 1000000000).toStringAsFixed(1)}B';
+    } else if (absVal >= 1000000) {
+      return '$sign${(absVal / 1000000).toStringAsFixed(0)}M';
+    } else if (absVal >= 1000) {
+      return '$sign${(absVal / 1000).toStringAsFixed(0)}k';
     }
     return value.toInt().toString();
   }

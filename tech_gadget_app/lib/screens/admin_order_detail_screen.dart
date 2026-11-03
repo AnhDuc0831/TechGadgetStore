@@ -5,6 +5,7 @@ import '../models/order.dart';
 import '../providers/auth_provider.dart';
 import '../providers/order_provider.dart';
 import '../utils/formatters.dart';
+import 'order_tracking_map_screen.dart';
 
 class AdminOrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -541,6 +542,11 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
   }
 
   Widget _buildShippingCard(AdminOrderModel order, ThemeData theme) {
+    final hasName = order.shippingName != null && order.shippingName!.trim().isNotEmpty;
+    final hasPhone = order.shippingPhone != null && order.shippingPhone!.trim().isNotEmpty;
+    final displayAddress = order.formattedShippingAddress;
+    final hasAddress = displayAddress.isNotEmpty && displayAddress != 'Chưa cập nhật địa chỉ';
+
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -554,27 +560,66 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
           children: [
             _buildDetailRow(
               icon: Icons.person_outline,
+              iconColor: const Color(0xFF2563EB),
               label: 'Người nhận',
-              value: order.shippingName ?? 'Chưa cập nhật',
+              value: hasName ? order.shippingName! : 'Chưa cập nhật tên',
+              isBold: true,
             ),
-            const Divider(height: 16),
+            const Divider(height: 18),
             _buildDetailRow(
               icon: Icons.phone_outlined,
+              iconColor: const Color(0xFF16A34A),
               label: 'Số điện thoại',
-              value: order.shippingPhone ?? 'Chưa cập nhật',
+              value: hasPhone ? order.shippingPhone! : 'Chưa cập nhật SĐT',
+              isBold: true,
             ),
-            const Divider(height: 16),
+            const Divider(height: 18),
             _buildDetailRow(
               icon: Icons.location_on_outlined,
+              iconColor: const Color(0xFFDC2626),
               label: 'Địa chỉ nhận',
-              value: order.shippingAddress.isEmpty ? 'Chưa cập nhật' : order.shippingAddress,
+              value: hasAddress ? displayAddress : 'Chưa cập nhật địa chỉ',
             ),
-            if (order.note != null && order.note!.isNotEmpty) ...[
-              const Divider(height: 16),
+            if (order.note != null && order.note!.trim().isNotEmpty) ...[
+              const Divider(height: 18),
               _buildDetailRow(
-                icon: Icons.note_outlined,
+                icon: Icons.chat_bubble_outline,
+                iconColor: Colors.amber.shade800,
                 label: 'Khách ghi chú',
                 value: order.note!,
+              ),
+            ],
+            if (hasAddress) ...[
+              const Divider(height: 18),
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => OrderTrackingMapScreen(order: order),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.directions_outlined, size: 18, color: Color(0xFF2563EB)),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Xem lộ trình giao hàng trên bản đồ',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.chevron_right, size: 16, color: Color(0xFF2563EB)),
+                    ],
+                  ),
+                ),
               ),
             ],
           ],
@@ -683,13 +728,15 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
 
   Widget _buildDetailRow({
     required IconData icon,
+    Color? iconColor,
     required String label,
     required String value,
+    bool isBold = false,
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: Colors.grey.shade600),
+        Icon(icon, size: 20, color: iconColor ?? Colors.grey.shade600),
         const SizedBox(width: 10),
         SizedBox(
           width: 100,
@@ -702,7 +749,11 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
         Expanded(
           child: SelectableText(
             value,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+              color: Colors.black87,
+            ),
           ),
         ),
       ],

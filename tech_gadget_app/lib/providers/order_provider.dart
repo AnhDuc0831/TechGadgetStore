@@ -130,6 +130,31 @@ class OrderProvider extends ChangeNotifier {
     }
   }
 
+  /// Khách hàng xác nhận đã nhận hàng
+  Future<OrderModel> confirmReceived(
+    String token,
+    String orderId,
+  ) async {
+    _setLoading(true);
+    try {
+      final updated = await _service.confirmReceived(token, orderId);
+      _errorMessage = null;
+
+      final index = _orders.indexWhere((o) => o.id == orderId);
+      if (index != -1) {
+        _orders[index] = updated;
+      }
+      return updated;
+    } catch (e) {
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      _setError(msg);
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   // ── ADMIN METHODS ──────────────────────────────────────────────────────────
 
   /// Admin tải danh sách đơn hàng có phân trang và lọc theo trạng thái

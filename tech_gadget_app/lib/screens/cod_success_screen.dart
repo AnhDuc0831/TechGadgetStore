@@ -101,9 +101,9 @@ class CodSuccessScreen extends StatelessWidget {
                             isBold: true,
                             valueColor: Colors.red.shade700,
                           ),
-                          if (order != null && order.shippingAddress.isNotEmpty) ...[
+                          if (order != null && order.formattedShippingAddress.isNotEmpty) ...[
                             const Divider(height: 16),
-                            _buildRow('Giao tới:', order.shippingAddress),
+                            _buildRow('Giao tới:', order.formattedShippingAddress),
                           ],
                         ],
                       ),

@@ -145,6 +145,32 @@ class OrderService {
     }
   }
 
+  /// POST /api/orders/{id}/confirm-received – Khách hàng xác nhận đã nhận được hàng
+  Future<OrderModel> confirmReceived(
+    String accessToken,
+    String orderId,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/api/orders/$orderId/confirm-received'),
+        headers: _headers(accessToken),
+      );
+
+      // Fallback: Nếu backend đang chạy bản cũ chưa có confirm-received, thử gọi cập nhật trạng thái nếu có quyền
+      if (response.statusCode == 404 || response.statusCode == 405) {
+        try {
+          return await updateOrderStatus(accessToken, orderId, 'Completed');
+        } catch (_) {}
+      }
+
+      _throwIfError(response);
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return OrderModel.fromJson(json);
+    } on SocketException {
+      throw Exception('Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng.');
+    }
+  }
+
   // ── ADMIN ENDPOINTS ────────────────────────────────────────────────────────
 
   /// GET /api/admin/orders?page=&pageSize=&status= – Admin xem danh sách đơn hàng có phân trang

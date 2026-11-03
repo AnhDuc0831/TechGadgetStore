@@ -10,6 +10,8 @@ import 'admin_dashboard_screen.dart';
 import 'cart_screen.dart';
 import 'product_detail_screen.dart';
 import 'profile_screen.dart';
+import '../widgets/customer_ai_chat_modal.dart';
+import '../widgets/admin_analytics_chat_modal.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -162,6 +164,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openCustomerAiChat([String? initialPrompt]) {
+    CustomerAiChatModal.show(
+      context: context,
+      currentProducts: _products,
+      categories: _categories,
+      brands: _brands,
+      initialPrompt: initialPrompt,
+    );
+  }
+
   Future<void> _showFilterSheet() async {
     final result = await showModalBottomSheet<ProductFilter>(
       context: context,
@@ -220,6 +232,12 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
+          // Nút AI Chatbox tư vấn khách hàng trên AppBar
+          IconButton(
+            tooltip: 'Trợ lý AI Tư vấn',
+            icon: const Icon(Icons.auto_awesome_rounded),
+            onPressed: () => _openCustomerAiChat(),
+          ),
           IconButton(
             tooltip: 'Hồ sơ cá nhân',
             icon: const Icon(Icons.person_outline),
@@ -274,13 +292,31 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _openCustomerAiChat(),
+        backgroundColor: const Color(0xFF2563EB),
+        foregroundColor: Colors.white,
+        elevation: 4,
+        icon: const Icon(Icons.smart_toy_rounded),
+        label: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Tư vấn AI',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            SizedBox(width: 5),
+            CircleAvatar(radius: 3.5, backgroundColor: Colors.greenAccent),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildAdminQuickBanner(BuildContext context) {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF0F172A), Color(0xFF1E293B)],
@@ -294,58 +330,108 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.blueAccent.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.insights_rounded, color: Colors.blueAccent, size: 26),
-          ),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Quản Trị Viên (Admin)',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 440;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blueAccent.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.insights_rounded, color: Colors.blueAccent, size: 24),
                   ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'Xem thống kê sản phẩm, đơn hàng & lợi nhuận',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 11,
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Quản Trị Viên (Admin)',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Thống kê sản phẩm, đơn hàng & lợi nhuận',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
+                  if (!isNarrow) ...[
+                    const SizedBox(width: 8),
+                    _buildAdminBannerButtons(context),
+                  ],
+                ],
+              ),
+              if (isNarrow) ...[
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    _buildAdminBannerButtons(context),
+                  ],
                 ),
               ],
-            ),
-          ),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              visualDensity: VisualDensity.compact,
-            ),
-            icon: const Icon(Icons.arrow_forward, size: 14),
-            label: const Text(
-              'Dashboard',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            ),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
+    );
+  }
+
+  Widget _buildAdminBannerButtons(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFFBAE6FD),
+            side: const BorderSide(color: Color(0xFF38BDF8)),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            visualDensity: VisualDensity.compact,
+          ),
+          icon: const Icon(Icons.auto_awesome, size: 14, color: Color(0xFF38BDF8)),
+          label: const Text(
+            'AI Thống Kê',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+          ),
+          onPressed: () => AdminAnalyticsChatModal.show(context: context),
+        ),
+        const SizedBox(width: 8),
+        FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.blueAccent,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            visualDensity: VisualDensity.compact,
+          ),
+          icon: const Icon(Icons.arrow_forward, size: 13),
+          label: const Text(
+            'Dashboard',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+          ),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+          ),
+        ),
+      ],
     );
   }
 

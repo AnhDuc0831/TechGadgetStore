@@ -9,6 +9,7 @@ import '../utils/formatters.dart';
 import '../widgets/product_card.dart';
 import '../widgets/product_image.dart';
 import '../widgets/rating_stars.dart';
+import '../widgets/customer_ai_chat_modal.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final String productId;
@@ -188,11 +189,28 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  void _openAiConsultant() {
+    if (_product == null) return;
+    CustomerAiChatModal.show(
+      context: context,
+      focusedProductId: _product!.id,
+      focusedProductName: _product!.name,
+      initialPrompt: 'Tư vấn cho tôi về sản phẩm ${_product!.name}, điểm nổi bật và phù hợp cho nhu cầu gì?',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(_product?.name ?? 'Chi tiết sản phẩm', overflow: TextOverflow.ellipsis),
+        actions: [
+          IconButton(
+            tooltip: 'Hỏi AI về sản phẩm này',
+            icon: const Icon(Icons.auto_awesome, color: Color(0xFF2563EB)),
+            onPressed: _openAiConsultant,
+          ),
+        ],
       ),
       body: _buildBody(context),
     );
@@ -497,6 +515,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               onPressed: _toggleFavorite,
               icon: Icon(_isFavorite ? Icons.favorite : Icons.favorite_border),
               label: Text(_isFavorite ? 'Đã yêu thích' : 'Thêm vào yêu thích'),
+            ),
+            const SizedBox(height: 10),
+            FilledButton.tonalIcon(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.blue.shade50,
+                foregroundColor: const Color(0xFF1D4ED8),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              ),
+              onPressed: _openAiConsultant,
+              icon: const Icon(Icons.auto_awesome, size: 20),
+              label: const Text('Hỏi AI tư vấn về sản phẩm này', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
           ],
         ),

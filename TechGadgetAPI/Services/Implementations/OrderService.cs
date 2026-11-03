@@ -538,6 +538,36 @@ public class OrderService : IOrderService
         }
     }
 
+    public async Task<OrderDto> ConfirmReceivedAsync(Guid orderId, Guid userId)
+    {
+        var order = await _orderRepo.GetOrderByIdAsync(orderId);
+        if (order == null)
+        {
+            throw new KeyNotFoundException("Không tìm thấy đơn hàng yêu cầu.");
+        }
+
+        if (order.UserId != userId)
+        {
+            throw new UnauthorizedAccessException("Bạn không có quyền thao tác trên đơn hàng này.");
+        }
+
+        var currentStatus = OrderStatusMapper.ToCanonical(order.Status);
+        if (currentStatus != CanonicalOrderStatus.Shipping)
+        {
+            throw new InvalidOperationException($"Chỉ có thể xác nhận đã nhận hàng khi đơn hàng đang ở trạng thái 'Đang giao hàng' (Shipping). Trạng thái hiện tại: {currentStatus}.");
+        }
+
+        order.Status = OrderStatus.Delivered;
+        if (order.PaymentMethod == PaymentMethod.Cod)
+        {
+            order.PaymentStatus = PaymentStatus.Paid;
+            order.PaidAt = DateTimeOffset.UtcNow;
+        }
+        order.UpdatedAt = DateTimeOffset.UtcNow;
+        await _orderRepo.UpdateOrderAsync(order);
+        return MapToCustomerDto(order);
+    }
+
     public async Task<int> CancelExpiredPayOSOrdersAsync(int olderThanMinutes = 15)
     {
         var threshold = DateTimeOffset.UtcNow.AddMinutes(-olderThanMinutes);
@@ -570,6 +600,10 @@ public class OrderService : IOrderService
                             && o.PaymentStatus != PaymentStatus.Paid
                             && o.Status != OrderStatus.Cancelled;
 
+        var (shippingName, shippingPhone, shippingAddress) = OrderDAO.ExtractShippingInfo(o.ShippingAddress, o.ShippingName, o.ShippingPhone);
+        shippingName ??= o.User?.FullName;
+        shippingPhone ??= o.User?.Phone;
+
         return new OrderDto
         {
             Id = o.Id,
@@ -578,9 +612,9 @@ public class OrderService : IOrderService
             PaymentStatus = OrderStatusMapper.ToCanonical(o.PaymentStatus),
             TotalAmount = o.TotalAmount,
             ShippingFee = o.ShippingFee,
-            ShippingName = o.ShippingName,
-            ShippingPhone = o.ShippingPhone,
-            ShippingAddress = OrderDAO.ExtractAddressText(o.ShippingAddress),
+            ShippingName = shippingName,
+            ShippingPhone = shippingPhone,
+            ShippingAddress = shippingAddress,
             Note = o.Note, // Customer note only!
             CreatedAt = o.CreatedAt,
             PaidAt = o.PaidAt,
@@ -606,6 +640,10 @@ public class OrderService : IOrderService
         var isNeedsReview = (o.Status == OrderStatus.Cancelled && o.PaymentStatus == PaymentStatus.Paid)
             || (o.InternalNote != null && o.InternalNote.Contains("manual refund", StringComparison.OrdinalIgnoreCase));
 
+        var (shippingName, shippingPhone, shippingAddress) = OrderDAO.ExtractShippingInfo(o.ShippingAddress, o.ShippingName, o.ShippingPhone);
+        shippingName ??= o.User?.FullName;
+        shippingPhone ??= o.User?.Phone;
+
         return new AdminOrderDto
         {
             Id = o.Id,
@@ -617,9 +655,9 @@ public class OrderService : IOrderService
             PaymentStatus = OrderStatusMapper.ToCanonical(o.PaymentStatus),
             TotalAmount = o.TotalAmount,
             ShippingFee = o.ShippingFee,
-            ShippingName = o.ShippingName,
-            ShippingPhone = o.ShippingPhone,
-            ShippingAddress = OrderDAO.ExtractAddressText(o.ShippingAddress),
+            ShippingName = shippingName,
+            ShippingPhone = shippingPhone,
+            ShippingAddress = shippingAddress,
             Note = o.Note,
             InternalNote = o.InternalNote,
             NeedsReview = isNeedsReview,

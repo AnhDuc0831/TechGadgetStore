@@ -75,6 +75,9 @@ builder.Services.Configure<BusinessObjects.DTOs.PayOSOptions>(
 builder.Services.Configure<BusinessObjects.DTOs.ShippingOptions>(
     builder.Configuration.GetSection(BusinessObjects.DTOs.ShippingOptions.SectionName));
 
+builder.Services.Configure<BusinessObjects.DTOs.CloudinaryOptions>(
+    builder.Configuration.GetSection(BusinessObjects.DTOs.CloudinaryOptions.SectionName));
+
 builder.Services.AddBusinessServicesLayer(connectionString);
 
 // 4. Configure Supabase JWT Authentication Middleware

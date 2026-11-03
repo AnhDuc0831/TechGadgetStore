@@ -243,28 +243,145 @@ public class OrderDAO
             .ToListAsync();
     }
 
-    public static string ExtractAddressText(string? rawJsonOrText)
+    public static (string? Name, string? Phone, string Address) ExtractShippingInfo(string? rawJsonOrText, string? existingName, string? existingPhone)
     {
-        if (string.IsNullOrWhiteSpace(rawJsonOrText)) return string.Empty;
-        try
+        string? name = string.IsNullOrWhiteSpace(existingName) ? null : existingName;
+        string? phone = string.IsNullOrWhiteSpace(existingPhone) ? null : existingPhone;
+        string address = rawJsonOrText ?? string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(rawJsonOrText))
         {
-            using var doc = JsonDocument.Parse(rawJsonOrText);
-            if (doc.RootElement.ValueKind == JsonValueKind.String)
+            try
             {
-                return doc.RootElement.GetString() ?? string.Empty;
-            }
-            if (doc.RootElement.ValueKind == JsonValueKind.Object)
-            {
-                if (doc.RootElement.TryGetProperty("address", out var addr))
+                using var doc = JsonDocument.Parse(rawJsonOrText);
+                if (doc.RootElement.ValueKind == JsonValueKind.String)
                 {
-                    return addr.GetString() ?? string.Empty;
+                    address = doc.RootElement.GetString() ?? string.Empty;
+                }
+                else if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
+                        if (doc.RootElement.TryGetProperty("recipient_name", out var n) ||
+                            doc.RootElement.TryGetProperty("name", out n) ||
+                            doc.RootElement.TryGetProperty("shipping_name", out n) ||
+                            doc.RootElement.TryGetProperty("shippingName", out n))
+                        {
+                            name = n.GetString();
+                        }
+                    }
+                    if (string.IsNullOrWhiteSpace(phone))
+                    {
+                        if (doc.RootElement.TryGetProperty("phone", out var p) ||
+                            doc.RootElement.TryGetProperty("shipping_phone", out p) ||
+                            doc.RootElement.TryGetProperty("shippingPhone", out p) ||
+                            doc.RootElement.TryGetProperty("phoneNumber", out p))
+                        {
+                            phone = p.GetString();
+                        }
+                    }
+                    string? street = null;
+                    if (doc.RootElement.TryGetProperty("address", out var a))
+                    {
+                        if (a.ValueKind == JsonValueKind.String)
+                        {
+                            street = a.GetString();
+                        }
+                        else if (a.ValueKind == JsonValueKind.Object)
+                        {
+                            var (_, _, nestedAddr) = ExtractShippingInfo(a.GetRawText(), null, null);
+                            street = nestedAddr;
+                        }
+                    }
+                    if (string.IsNullOrWhiteSpace(street) || street.Trim().StartsWith("{"))
+                    {
+                        if (doc.RootElement.TryGetProperty("street", out var s) ||
+                            doc.RootElement.TryGetProperty("street_address", out s) ||
+                            doc.RootElement.TryGetProperty("detail", out s) ||
+                            doc.RootElement.TryGetProperty("detail_address", out s) ||
+                            doc.RootElement.TryGetProperty("dia_chi", out s) ||
+                            doc.RootElement.TryGetProperty("line1", out s) ||
+                            doc.RootElement.TryGetProperty("address_line1", out s) ||
+                            doc.RootElement.TryGetProperty("full_address", out s))
+                        {
+                            street = s.GetString();
+                        }
+                    }
+
+                    string? ward = null;
+                    if (doc.RootElement.TryGetProperty("ward", out var w) ||
+                        doc.RootElement.TryGetProperty("phuong", out w) ||
+                        doc.RootElement.TryGetProperty("xa", out w))
+                    {
+                        ward = w.GetString();
+                    }
+
+                    string? district = null;
+                    if (doc.RootElement.TryGetProperty("district", out var d) ||
+                        doc.RootElement.TryGetProperty("quan", out d) ||
+                        doc.RootElement.TryGetProperty("huyen", out d))
+                    {
+                        district = d.GetString();
+                    }
+
+                    string? city = null;
+                    if (doc.RootElement.TryGetProperty("city", out var c) ||
+                        doc.RootElement.TryGetProperty("province", out c) ||
+                        doc.RootElement.TryGetProperty("tinh", out c) ||
+                        doc.RootElement.TryGetProperty("thanh_pho", out c))
+                    {
+                        city = c.GetString();
+                    }
+
+                    var parts = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(street) && !street.Trim().StartsWith("{")) parts.Add(street.Trim());
+                    if (!string.IsNullOrWhiteSpace(ward) && !parts.Any(p => p.Contains(ward, StringComparison.OrdinalIgnoreCase))) parts.Add(ward.Trim());
+                    if (!string.IsNullOrWhiteSpace(district) && !parts.Any(p => p.Contains(district, StringComparison.OrdinalIgnoreCase))) parts.Add(district.Trim());
+                    if (!string.IsNullOrWhiteSpace(city) && !parts.Any(p => p.Contains(city, StringComparison.OrdinalIgnoreCase))) parts.Add(city.Trim());
+
+                    if (parts.Count > 0)
+                    {
+                        address = string.Join(", ", parts);
+                    }
+                    else
+                    {
+                        var metaKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            "recipient_name", "recipientname", "name", "full_name", "fullname",
+                            "shipping_name", "shippingname", "phone", "phonenumber", "phone_number",
+                            "sdt", "mobile", "shipping_phone", "shippingphone", "id", "status", "note"
+                        };
+                        var fallbackParts = new List<string>();
+                        foreach (var prop in doc.RootElement.EnumerateObject())
+                        {
+                            if (!metaKeys.Contains(prop.Name))
+                            {
+                                if (prop.Value.ValueKind == JsonValueKind.String)
+                                {
+                                    var val = prop.Value.GetString();
+                                    if (!string.IsNullOrWhiteSpace(val) && !val.Trim().StartsWith("{")) fallbackParts.Add(val.Trim());
+                                }
+                            }
+                        }
+                        if (fallbackParts.Count > 0)
+                        {
+                            address = string.Join(", ", fallbackParts);
+                        }
+                    }
                 }
             }
-            return rawJsonOrText;
+            catch
+            {
+                // raw text
+            }
         }
-        catch
-        {
-            return rawJsonOrText;
-        }
+
+        return (name, phone, address);
+    }
+
+    public static string ExtractAddressText(string? rawJsonOrText)
+    {
+        var (_, _, address) = ExtractShippingInfo(rawJsonOrText, null, null);
+        return address;
     }
 }

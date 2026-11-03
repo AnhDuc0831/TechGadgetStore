@@ -14,5 +14,6 @@ public interface IOrderService
     Task<bool> ProcessPayOSWebhookAsync(Webhook? webhook);
     Task<PagedResult<AdminOrderDto>> GetAdminOrdersAsync(int page, int pageSize, CanonicalOrderStatus? status);
     Task<AdminOrderDto> UpdateOrderStatusAsync(Guid orderId, CanonicalOrderStatus newStatus);
+    Task<OrderDto> ConfirmReceivedAsync(Guid orderId, Guid userId);
     Task<int> CancelExpiredPayOSOrdersAsync(int olderThanMinutes = 15);
 }

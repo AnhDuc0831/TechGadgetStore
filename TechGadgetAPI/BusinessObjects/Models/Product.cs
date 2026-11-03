@@ -30,8 +30,17 @@ public class Product
     [Column("thumbnail_url")]
     public string? ThumbnailUrl { get; set; }
 
+    [Column("images", TypeName = "text[]")]
+    public List<string> Images { get; set; } = new();
+
     [Column("base_price", TypeName = "numeric(14,2)")]
     public decimal BasePrice { get; set; }
+
+    [Column("discount_price", TypeName = "numeric(14,2)")]
+    public decimal? DiscountPrice { get; set; }
+
+    [Column("specifications", TypeName = "jsonb")]
+    public string Specifications { get; set; } = "{}";
 
     [Column("is_active")]
     public bool IsActive { get; set; } = true;

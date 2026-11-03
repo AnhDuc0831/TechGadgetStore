@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<IPayOSService, PayOSService>();
         services.AddScoped<IOrderService, OrderService>();
+        services.AddScoped<ICloudinaryService, CloudinaryService>();
         services.AddHostedService<PayOSOrderCleanupHostedService>();
 
         return services;

@@ -5,6 +5,7 @@ import '../models/order.dart';
 import '../providers/auth_provider.dart';
 import '../providers/order_provider.dart';
 import '../utils/formatters.dart';
+import 'order_tracking_map_screen.dart';
 import 'payos_payment_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
@@ -25,6 +26,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool _isLoading = true;
   String? _errorMessage;
   bool _isCancelling = false;
+  bool _isConfirmingReceived = false;
 
   @override
   void initState() {
@@ -139,6 +141,72 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  Future<void> _confirmReceivedOrder() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 26),
+            SizedBox(width: 8),
+            Expanded(child: Text('Xác nhận đã nhận hàng', style: TextStyle(fontSize: 18))),
+          ],
+        ),
+        content: const Text(
+          'Bạn đã nhận được kiện hàng và kiểm tra đầy đủ sản phẩm chưa?\n\n'
+          'Sau khi xác nhận, đơn hàng sẽ được chuyển sang trạng thái Hoàn thành.',
+          style: TextStyle(fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Để sau', style: TextStyle(color: Colors.grey)),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.check, size: 18),
+            label: const Text('Đã nhận hàng'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    final auth = context.read<AuthProvider>();
+    final token = auth.accessToken;
+    if (token == null) return;
+
+    setState(() => _isConfirmingReceived = true);
+
+    try {
+      final orderProvider = context.read<OrderProvider>();
+      final updated = await orderProvider.confirmReceived(token, widget.orderId);
+      if (mounted) {
+        setState(() {
+          _order = updated;
+          _isConfirmingReceived = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Xác nhận đã nhận hàng thành công! Cảm ơn bạn đã mua sắm.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isConfirmingReceived = false);
+        final msg = e.toString().replaceFirst('Exception: ', '');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), backgroundColor: Colors.red.shade700),
+        );
+      }
+    }
+  }
+
   void _reopenPayment() {
     if (_order != null && _order!.checkoutUrl != null) {
       Navigator.of(context).push(
@@ -224,8 +292,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             _buildStatusHeaderCard(order, theme),
             const SizedBox(height: 16),
 
-            // Nút thao tác nhanh (Hủy đơn hoặc Thanh toán lại)
-            if (order.canReopenPayment || order.canCancel) ...[
+            // Banner đã hoàn thành hoặc các nút thao tác
+            if (order.statusEnum == OrderStatusEnum.completed) ...[
+              _buildCompletedBanner(theme),
+              const SizedBox(height: 16),
+            ] else if (order.canConfirmReceived || order.canReopenPayment || order.canCancel) ...[
               _buildActionRow(order, theme),
               const SizedBox(height: 16),
             ],
@@ -326,42 +397,119 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  Widget _buildActionRow(OrderModel order, ThemeData theme) {
-    return Row(
-      children: [
-        if (order.canReopenPayment)
+  Widget _buildCompletedBanner(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0FDF4),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.verified, color: Color(0xFF16A34A), size: 30),
+          SizedBox(width: 12),
           Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Đơn hàng đã hoàn thành',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF15803D),
+                    fontSize: 14,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Đã nhận được hàng thành công.',
+                  style: TextStyle(
+                    color: Color(0xFF166534),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionRow(OrderModel order, ThemeData theme) {
+    return Column(
+      children: [
+        if (order.canConfirmReceived) ...[
+          SizedBox(
+            width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _reopenPayment,
-              icon: const Icon(Icons.qr_code_scanner),
-              label: const Text('Thanh toán lại'),
+              onPressed: _isConfirmingReceived ? null : _confirmReceivedOrder,
+              icon: _isConfirmingReceived
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.check_circle_outline, size: 20),
+              label: const Text(
+                'Đã nhận được hàng',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
               style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                backgroundColor: const Color(0xFF16A34A),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 1,
               ),
             ),
           ),
-        if (order.canReopenPayment && order.canCancel) const SizedBox(width: 12),
-        if (order.canCancel)
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: _isCancelling ? null : _confirmCancel,
-              icon: _isCancelling
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.cancel_outlined, color: Colors.red),
-              label: const Text('Hủy đơn hàng', style: TextStyle(color: Colors.red)),
-              style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.red.shade300),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
+          if (order.canReopenPayment || order.canCancel) const SizedBox(height: 10),
+        ],
+        if (order.canReopenPayment || order.canCancel)
+          Row(
+            children: [
+              if (order.canReopenPayment)
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _reopenPayment,
+                    icon: const Icon(Icons.qr_code_scanner),
+                    label: const Text('Thanh toán lại'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              if (order.canReopenPayment && order.canCancel) const SizedBox(width: 12),
+              if (order.canCancel)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isCancelling ? null : _confirmCancel,
+                    icon: _isCancelling
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.cancel_outlined, color: Colors.red),
+                    label: const Text('Hủy đơn hàng', style: TextStyle(color: Colors.red)),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.red.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+            ],
           ),
       ],
     );
   }
 
   Widget _buildShippingCard(OrderModel order, ThemeData theme) {
+    final hasName = order.shippingName != null && order.shippingName!.trim().isNotEmpty;
+    final hasPhone = order.shippingPhone != null && order.shippingPhone!.trim().isNotEmpty;
+    final displayAddress = order.formattedShippingAddress;
+    final hasAddress = displayAddress.isNotEmpty && displayAddress != 'Chưa cập nhật địa chỉ';
+
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -375,27 +523,66 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           children: [
             _buildDetailRow(
               icon: Icons.person_outline,
+              iconColor: const Color(0xFF2563EB),
               label: 'Người nhận',
-              value: order.shippingName ?? 'Chưa cập nhật',
+              value: hasName ? order.shippingName! : 'Chưa cập nhật tên',
+              isBold: true,
             ),
-            const Divider(height: 16),
+            const Divider(height: 18),
             _buildDetailRow(
               icon: Icons.phone_outlined,
+              iconColor: const Color(0xFF16A34A),
               label: 'Số điện thoại',
-              value: order.shippingPhone ?? 'Chưa cập nhật',
+              value: hasPhone ? order.shippingPhone! : 'Chưa cập nhật SĐT',
+              isBold: true,
             ),
-            const Divider(height: 16),
+            const Divider(height: 18),
             _buildDetailRow(
               icon: Icons.location_on_outlined,
+              iconColor: const Color(0xFFDC2626),
               label: 'Địa chỉ nhận',
-              value: order.shippingAddress.isEmpty ? 'Chưa cập nhật' : order.shippingAddress,
+              value: hasAddress ? displayAddress : 'Chưa cập nhật địa chỉ',
             ),
-            if (order.note != null && order.note!.isNotEmpty) ...[
-              const Divider(height: 16),
+            if (order.note != null && order.note!.trim().isNotEmpty) ...[
+              const Divider(height: 18),
               _buildDetailRow(
-                icon: Icons.note_outlined,
+                icon: Icons.chat_bubble_outline,
+                iconColor: Colors.amber.shade800,
                 label: 'Ghi chú',
                 value: order.note!,
+              ),
+            ],
+            if (hasAddress) ...[
+              const Divider(height: 18),
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => OrderTrackingMapScreen(order: order),
+                    ),
+                  );
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.directions_outlined, size: 18, color: Color(0xFF2563EB)),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Xem lộ trình giao hàng trên bản đồ',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.chevron_right, size: 16, color: Color(0xFF2563EB)),
+                    ],
+                  ),
+                ),
               ),
             ],
           ],
@@ -497,16 +684,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _buildDetailRow({
     required IconData icon,
+    Color? iconColor,
     required String label,
     required String value,
+    bool isBold = false,
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 20, color: Colors.grey.shade600),
+        Icon(icon, size: 20, color: iconColor ?? Colors.grey.shade600),
         const SizedBox(width: 10),
         SizedBox(
-          width: 90,
+          width: 95,
           child: Text(
             label,
             style: const TextStyle(fontSize: 13, color: Colors.black54),
@@ -516,7 +705,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+              color: Colors.black87,
+              height: 1.3,
+            ),
           ),
         ),
       ],

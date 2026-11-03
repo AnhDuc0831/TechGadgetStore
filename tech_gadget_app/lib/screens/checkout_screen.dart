@@ -8,6 +8,7 @@ import '../providers/order_provider.dart';
 import '../utils/formatters.dart';
 import '../widgets/product_image.dart';
 import 'cod_success_screen.dart';
+import 'location_picker_screen.dart';
 import 'payos_payment_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -63,6 +64,29 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // Ước tính phí ship: 30,000đ; miễn phí nếu đơn hàng từ 500,000đ
   double get _estimatedShippingFee => _subtotal >= 500000 ? 0.0 : 30000.0;
   double get _estimatedTotal => _subtotal + _estimatedShippingFee;
+
+  Future<void> _openMapPicker() async {
+    final selectedAddress = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(
+          initialAddress: _addressController.text.trim().isNotEmpty ? _addressController.text.trim() : null,
+        ),
+      ),
+    );
+
+    if (selectedAddress != null && selectedAddress.trim().isNotEmpty && mounted) {
+      setState(() {
+        _addressController.text = selectedAddress.trim();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đã cập nhật địa chỉ từ bản đồ.'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
 
   Future<void> _handleCheckout() async {
     if (!_formKey.currentState!.validate()) return;
@@ -328,14 +352,38 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               },
             ),
             const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Địa chỉ nhận hàng *',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87),
+                ),
+                TextButton.icon(
+                  onPressed: _openMapPicker,
+                  icon: const Icon(Icons.map_outlined, size: 16),
+                  label: const Text('Chọn trên bản đồ'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF2563EB),
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
             TextFormField(
               controller: _addressController,
               maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Địa chỉ giao hàng chi tiết *',
-                prefixIcon: Icon(Icons.location_on_outlined),
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
                 hintText: 'Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành phố',
+                prefixIcon: const Icon(Icons.location_on_outlined),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.my_location, color: Color(0xFF2563EB), size: 20),
+                  tooltip: 'Chọn vị trí trên bản đồ',
+                  onPressed: _openMapPicker,
+                ),
+                border: const OutlineInputBorder(),
               ),
               validator: (v) {
                 if (v == null || v.trim().isEmpty) {

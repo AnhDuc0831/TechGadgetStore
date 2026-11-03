@@ -8,6 +8,7 @@ namespace DataAccessObjects;
 public class DashboardDAO
 {
     private readonly TechGadgetDbContext _context;
+    private static readonly TimeSpan VnTimeZoneOffset = TimeSpan.FromHours(7); // Múi giờ Việt Nam (UTC+7)
 
     public DashboardDAO(TechGadgetDbContext context)
     {
@@ -18,33 +19,54 @@ public class DashboardDAO
     {
         var (startDate, endDate) = ResolveDateRange(query);
 
-        // 1. Base query for orders in period
-        var ordersInPeriod = await _context.Orders
+        // 1. Lấy toàn bộ đơn hàng trong kỳ truy vấn kèm OrderItems, ProductVariant và Product
+        var queryable = _context.Orders
             .AsNoTracking()
             .Include(o => o.OrderItems)
                 .ThenInclude(oi => oi.ProductVariant)
-            .Where(o => o.CreatedAt >= startDate && o.CreatedAt <= endDate)
-            .ToListAsync();
+                    .ThenInclude(pv => pv.Product)
+            .AsQueryable();
 
-        // 2. Successful / Paid orders for Revenue and Profit calculation:
-        // Count only Paid orders (PayOS) and Completed/Delivered orders (COD)
+        if (query.Period.ToLowerInvariant() != "all")
+        {
+            queryable = queryable.Where(o => o.CreatedAt >= startDate && o.CreatedAt <= endDate);
+        }
+        else if (query.EndDate.HasValue)
+        {
+            queryable = queryable.Where(o => o.CreatedAt <= endDate);
+        }
+
+        var ordersInPeriod = await queryable.ToListAsync();
+
+        // 2. Xác định các đơn hàng hợp lệ đem lại doanh thu thực tế:
+        // - Loại trừ triệt để đơn đã hủy, hết hạn thanh toán, hoặc đã hoàn tiền
+        // - Đơn thanh toán trước (PayOS, thẻ, chuyển khoản...): phải đã thanh toán thành công (PaymentStatus == Paid)
+        // - Đơn COD: chỉ tính khi đã giao thành công/hoàn thành hoặc đã nhận tiền
         var successfulOrders = ordersInPeriod
             .Where(o =>
-                (o.PaymentMethod == PaymentMethod.PayOS && o.PaymentStatus == PaymentStatus.Paid) ||
-                (o.PaymentMethod == PaymentMethod.Cod && (o.Status == OrderStatus.Completed || o.Status == OrderStatus.Delivered)) ||
-                (o.PaymentMethod != PaymentMethod.PayOS && o.PaymentMethod != PaymentMethod.Cod && (o.Status == OrderStatus.Completed || o.Status == OrderStatus.Delivered || o.PaymentStatus == PaymentStatus.Paid)))
+                o.Status != OrderStatus.Cancelled &&
+                o.PaymentStatus != PaymentStatus.Cancelled &&
+                o.PaymentStatus != PaymentStatus.Expired &&
+                o.PaymentStatus != PaymentStatus.Refunded &&
+                (
+                    o.PaymentStatus == PaymentStatus.Paid ||
+                    (o.PaymentMethod == PaymentMethod.Cod && (o.Status == OrderStatus.Completed || o.Status == OrderStatus.Delivered))
+                ))
             .ToList();
 
+        // Doanh thu thực thu từ các đơn hàng thành công
         var totalRevenue = successfulOrders.Sum(o => o.TotalAmount);
 
+        // Lợi nhuận gộp thực tế = Tổng (Giá bán - Giá vốn thực) * Số lượng
+        // Tuyệt đối không dùng hệ số giả 0.7m
         decimal totalProfit = 0;
         foreach (var order in successfulOrders)
         {
             foreach (var item in order.OrderItems)
             {
-                var costPrice = item.CostPrice > 0 
-                    ? item.CostPrice 
-                    : (item.ProductVariant?.CostPrice > 0 ? item.ProductVariant.CostPrice : Math.Round(item.UnitPrice * 0.7m, 2));
+                var costPrice = item.CostPrice > 0
+                    ? item.CostPrice
+                    : (item.ProductVariant != null && item.ProductVariant.CostPrice > 0 ? item.ProductVariant.CostPrice : 0);
 
                 totalProfit += (item.UnitPrice - costPrice) * item.Quantity;
             }
@@ -52,7 +74,7 @@ public class DashboardDAO
 
         var profitMargin = totalRevenue > 0 ? (double)Math.Round((totalProfit / totalRevenue) * 100, 2) : 0;
 
-        // 3. Products & Stock Counts
+        // 3. Đếm sản phẩm và biến thể tồn kho
         var totalProducts = await _context.Products.CountAsync(p => p.IsActive);
         var lowStockVariants = await _context.ProductVariants
             .AsNoTracking()
@@ -64,45 +86,65 @@ public class DashboardDAO
         var lowStockCount = lowStockVariants.Count(v => v.StockQuantity > 0);
         var outOfStockCount = lowStockVariants.Count(v => v.StockQuantity == 0);
 
-        // 4. Order Status Distribution
+        // 4. Phân bố trạng thái đơn hàng (chuẩn hóa theo 5 trạng thái chuẩn nghiệp vụ)
         var totalOrders = ordersInPeriod.Count;
-        var orderStatusDistribution = Enum.GetValues<OrderStatus>()
-            .Select(status =>
-            {
-                var count = ordersInPeriod.Count(o => o.Status == status);
-                var pct = totalOrders > 0 ? Math.Round((double)count / totalOrders * 100, 1) : 0;
-                return new OrderStatusCountDto
-                {
-                    Status = status.ToString(),
-                    StatusNameVi = GetStatusNameVi(status),
-                    Count = count,
-                    Percentage = pct
-                };
-            })
-            .ToList();
+        var canonicalOrderGroups = ordersInPeriod
+            .GroupBy(o => OrderStatusMapper.ToCanonical(o.Status))
+            .ToDictionary(g => g.Key, g => g.Count());
 
-        // 5. Chart Data Points (continuous dates)
+        var standardStatuses = new[]
+        {
+            CanonicalOrderStatus.Pending,
+            CanonicalOrderStatus.Confirmed,
+            CanonicalOrderStatus.Shipping,
+            CanonicalOrderStatus.Completed,
+            CanonicalOrderStatus.Cancelled
+        };
+
+        var orderStatusDistribution = standardStatuses.Select(status =>
+        {
+            var count = canonicalOrderGroups.GetValueOrDefault(status, 0);
+            var pct = totalOrders > 0 ? Math.Round((double)count / totalOrders * 100, 1) : 0;
+            return new OrderStatusCountDto
+            {
+                Status = status.ToString(),
+                StatusNameVi = GetCanonicalStatusNameVi(status),
+                Count = count,
+                Percentage = pct
+            };
+        }).ToList();
+
+        // 5. Chuỗi dữ liệu biểu đồ Doanh thu & Lợi nhuận
         var chartData = GenerateChartData(successfulOrders, startDate, endDate);
 
-        // 6. Top Selling Products
+        // 6. Top sản phẩm bán chạy nhất (gộp theo ProductId, dùng giá vốn thực tế)
         var topSellingProducts = successfulOrders
             .SelectMany(o => o.OrderItems)
-            .GroupBy(oi => new { oi.ProductVariant.ProductId, oi.ProductName })
+            .Where(oi => oi.ProductVariant != null || !string.IsNullOrWhiteSpace(oi.ProductName))
+            .GroupBy(oi => oi.ProductVariant != null && oi.ProductVariant.ProductId != Guid.Empty
+                ? oi.ProductVariant.ProductId
+                : (oi.ProductVariantId != Guid.Empty ? oi.ProductVariantId : Guid.NewGuid()))
             .Select(g =>
             {
+                var firstItem = g.First();
+                var productName = firstItem.ProductVariant?.Product?.Name
+                    ?? CleanProductName(firstItem.ProductName);
+
                 var units = g.Sum(x => x.Quantity);
                 var rev = g.Sum(x => x.UnitPrice * x.Quantity);
                 var prof = g.Sum(x =>
                 {
                     var cost = x.CostPrice > 0
                         ? x.CostPrice
-                        : (x.ProductVariant?.CostPrice > 0 ? x.ProductVariant.CostPrice : Math.Round(x.UnitPrice * 0.7m, 2));
+                        : (x.ProductVariant != null && x.ProductVariant.CostPrice > 0 ? x.ProductVariant.CostPrice : 0);
                     return (x.UnitPrice - cost) * x.Quantity;
                 });
+
                 return new TopProductDto
                 {
-                    ProductId = g.Key.ProductId,
-                    ProductName = g.Key.ProductName,
+                    ProductId = g.Key,
+                    ProductName = productName,
+                    ThumbnailUrl = firstItem.ProductVariant?.Product?.ThumbnailUrl,
                     UnitsSold = units,
                     TotalRevenue = rev,
                     TotalProfit = prof
@@ -112,26 +154,30 @@ public class DashboardDAO
             .Take(query.TopProductsLimit)
             .ToList();
 
-        // Fetch thumbnails for top selling products
-        if (topSellingProducts.Count > 0)
+        // Bổ sung thumbnail nếu thiếu
+        var missingThumbIds = topSellingProducts
+            .Where(tp => string.IsNullOrEmpty(tp.ThumbnailUrl) && tp.ProductId != Guid.Empty)
+            .Select(tp => tp.ProductId)
+            .ToList();
+
+        if (missingThumbIds.Count > 0)
         {
-            var productIds = topSellingProducts.Select(tp => tp.ProductId).ToList();
             var thumbnails = await _context.Products
                 .AsNoTracking()
-                .Where(p => productIds.Contains(p.Id))
+                .Where(p => missingThumbIds.Contains(p.Id))
                 .Select(p => new { p.Id, p.ThumbnailUrl })
                 .ToDictionaryAsync(p => p.Id, p => p.ThumbnailUrl);
 
             foreach (var tp in topSellingProducts)
             {
-                if (thumbnails.TryGetValue(tp.ProductId, out var thumb))
+                if (string.IsNullOrEmpty(tp.ThumbnailUrl) && thumbnails.TryGetValue(tp.ProductId, out var thumb))
                 {
                     tp.ThumbnailUrl = thumb;
                 }
             }
         }
 
-        // 7. Low Stock Alerts
+        // 7. Cảnh báo sắp hết hàng / hết hàng
         var lowStockAlerts = lowStockVariants
             .Take(10)
             .Select(v => new LowStockItemDto
@@ -153,9 +199,9 @@ public class DashboardDAO
                 TotalProfit = totalProfit,
                 ProfitMarginPercentage = profitMargin,
                 TotalOrders = totalOrders,
-                DeliveredOrders = ordersInPeriod.Count(o => o.Status == OrderStatus.Delivered),
-                PendingOrders = ordersInPeriod.Count(o => o.Status == OrderStatus.Pending || o.Status == OrderStatus.Processing),
-                CancelledOrders = ordersInPeriod.Count(o => o.Status == OrderStatus.Cancelled),
+                DeliveredOrders = canonicalOrderGroups.GetValueOrDefault(CanonicalOrderStatus.Completed, 0),
+                PendingOrders = canonicalOrderGroups.GetValueOrDefault(CanonicalOrderStatus.Pending, 0),
+                CancelledOrders = canonicalOrderGroups.GetValueOrDefault(CanonicalOrderStatus.Cancelled, 0),
                 TotalProducts = totalProducts,
                 LowStockProductsCount = lowStockCount,
                 OutOfStockProductsCount = outOfStockCount,
@@ -170,37 +216,37 @@ public class DashboardDAO
 
     private static (DateTimeOffset Start, DateTimeOffset End) ResolveDateRange(DashboardQueryParams query)
     {
-        var now = DateTimeOffset.UtcNow;
-        var end = query.EndDate ?? now;
+        var nowVn = DateTimeOffset.UtcNow.ToOffset(VnTimeZoneOffset);
+        var endUtc = (query.EndDate ?? DateTimeOffset.UtcNow).ToUniversalTime();
 
-        DateTimeOffset start;
+        DateTimeOffset startUtc;
         switch (query.Period.ToLowerInvariant())
         {
             case "today":
-                start = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero);
+                startUtc = new DateTimeOffset(nowVn.Year, nowVn.Month, nowVn.Day, 0, 0, 0, VnTimeZoneOffset).ToUniversalTime();
                 break;
             case "7days":
-                start = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero).AddDays(-6);
+                startUtc = new DateTimeOffset(nowVn.Year, nowVn.Month, nowVn.Day, 0, 0, 0, VnTimeZoneOffset).AddDays(-6).ToUniversalTime();
                 break;
             case "this_month":
-                start = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
+                startUtc = new DateTimeOffset(nowVn.Year, nowVn.Month, 1, 0, 0, 0, VnTimeZoneOffset).ToUniversalTime();
                 break;
             case "this_year":
-                start = new DateTimeOffset(now.Year, 1, 1, 0, 0, 0, TimeSpan.Zero);
+                startUtc = new DateTimeOffset(nowVn.Year, 1, 1, 0, 0, 0, VnTimeZoneOffset).ToUniversalTime();
                 break;
             case "all":
-                start = DateTimeOffset.MinValue;
+                startUtc = DateTimeOffset.MinValue;
                 break;
             case "custom":
-                start = query.StartDate ?? now.AddDays(-30);
+                startUtc = (query.StartDate ?? nowVn.AddDays(-30)).ToUniversalTime();
                 break;
             case "30days":
             default:
-                start = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero).AddDays(-29);
+                startUtc = new DateTimeOffset(nowVn.Year, nowVn.Month, nowVn.Day, 0, 0, 0, VnTimeZoneOffset).AddDays(-29).ToUniversalTime();
                 break;
         }
 
-        return (start, end);
+        return (startUtc, endUtc);
     }
 
     private static List<RevenueProfitChartPointDto> GenerateChartData(
@@ -209,16 +255,26 @@ public class DashboardDAO
         DateTimeOffset end)
     {
         var result = new List<RevenueProfitChartPointDto>();
-        var spanDays = (end.Date - start.Date).TotalDays;
 
-        // Group by day if span <= 60 days, otherwise group by month
+        // Giới hạn ngày theo múi giờ Việt Nam
+        var startVnDate = start == DateTimeOffset.MinValue
+            ? DateTimeOffset.UtcNow.ToOffset(VnTimeZoneOffset).Date.AddMonths(-11)
+            : start.ToOffset(VnTimeZoneOffset).Date;
+        var endVnDate = end.ToOffset(VnTimeZoneOffset).Date;
+
+        var spanDays = (endVnDate - startVnDate).TotalDays;
+
         if (spanDays <= 60 && start != DateTimeOffset.MinValue)
         {
             var dayCount = (int)spanDays + 1;
             for (int i = 0; i < dayCount; i++)
             {
-                var curDate = start.Date.AddDays(i);
-                var ordersOnDay = orders.Where(o => o.CreatedAt.Date == curDate).ToList();
+                var curDate = startVnDate.AddDays(i);
+                var ordersOnDay = orders.Where(o =>
+                {
+                    var orderDate = (o.PaidAt ?? o.CreatedAt).ToOffset(VnTimeZoneOffset).Date;
+                    return orderDate == curDate;
+                }).ToList();
 
                 var dayRevenue = ordersOnDay.Sum(o => o.TotalAmount);
                 decimal dayProfit = 0;
@@ -228,7 +284,7 @@ public class DashboardDAO
                     {
                         var cost = item.CostPrice > 0
                             ? item.CostPrice
-                            : (item.ProductVariant?.CostPrice > 0 ? item.ProductVariant.CostPrice : Math.Round(item.UnitPrice * 0.7m, 2));
+                            : (item.ProductVariant != null && item.ProductVariant.CostPrice > 0 ? item.ProductVariant.CostPrice : 0);
                         dayProfit += (item.UnitPrice - cost) * item.Quantity;
                     }
                 }
@@ -245,9 +301,13 @@ public class DashboardDAO
         }
         else
         {
-            // Monthly grouping
+            // Nhóm theo từng tháng thực tế
             var monthlyGroup = orders
-                .GroupBy(o => new { o.CreatedAt.Year, o.CreatedAt.Month })
+                .GroupBy(o =>
+                {
+                    var orderVn = (o.PaidAt ?? o.CreatedAt).ToOffset(VnTimeZoneOffset);
+                    return new { orderVn.Year, orderVn.Month };
+                })
                 .OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month);
 
             foreach (var g in monthlyGroup)
@@ -260,7 +320,7 @@ public class DashboardDAO
                     {
                         var cost = item.CostPrice > 0
                             ? item.CostPrice
-                            : (item.ProductVariant?.CostPrice > 0 ? item.ProductVariant.CostPrice : Math.Round(item.UnitPrice * 0.7m, 2));
+                            : (item.ProductVariant != null && item.ProductVariant.CostPrice > 0 ? item.ProductVariant.CostPrice : 0);
                         prof += (item.UnitPrice - cost) * item.Quantity;
                     }
                 }
@@ -277,10 +337,11 @@ public class DashboardDAO
 
             if (result.Count == 0)
             {
+                var nowVn = DateTimeOffset.UtcNow.ToOffset(VnTimeZoneOffset);
                 result.Add(new RevenueProfitChartPointDto
                 {
-                    Date = DateTime.UtcNow.ToString("yyyy-MM-01"),
-                    Label = $"T{DateTime.UtcNow.Month}/{DateTime.UtcNow.Year}",
+                    Date = nowVn.ToString("yyyy-MM-01"),
+                    Label = $"T{nowVn.Month}/{nowVn.Year}",
                     Revenue = 0,
                     Profit = 0,
                     OrderCount = 0
@@ -291,14 +352,20 @@ public class DashboardDAO
         return result;
     }
 
-    private static string GetStatusNameVi(OrderStatus status) => status switch
+    private static string CleanProductName(string rawName)
     {
-        OrderStatus.Pending => "Chờ duyệt",
-        OrderStatus.Processing => "Đang xử lý",
-        OrderStatus.Shipped => "Đang giao hàng",
-        OrderStatus.Delivered => "Đã giao thành công",
-        OrderStatus.Cancelled => "Đã hủy",
+        if (string.IsNullOrWhiteSpace(rawName)) return "Sản phẩm";
+        var idx = rawName.IndexOf(" - ", StringComparison.Ordinal);
+        return idx > 0 ? rawName.Substring(0, idx).Trim() : rawName.Trim();
+    }
+
+    private static string GetCanonicalStatusNameVi(CanonicalOrderStatus status) => status switch
+    {
+        CanonicalOrderStatus.Pending => "Chờ duyệt",
+        CanonicalOrderStatus.Confirmed => "Đã xác nhận",
+        CanonicalOrderStatus.Shipping => "Đang giao hàng",
+        CanonicalOrderStatus.Completed => "Hoàn thành",
+        CanonicalOrderStatus.Cancelled => "Đã hủy",
         _ => status.ToString()
     };
 }
-

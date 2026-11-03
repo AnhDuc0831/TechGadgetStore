@@ -48,9 +48,13 @@ class ProductListItem {
   final String slug;
   final String? thumbnailUrl;
   final double basePrice;
+  final double? discountPrice;
   final double minPrice;
   final double maxPrice;
   final bool inStock;
+  final int totalStockQuantity;
+  final bool isActive;
+  final DateTime? createdAt;
   final Category category;
   final Brand brand;
   final double averageRating;
@@ -62,9 +66,13 @@ class ProductListItem {
     required this.slug,
     this.thumbnailUrl,
     required this.basePrice,
+    this.discountPrice,
     required this.minPrice,
     required this.maxPrice,
     required this.inStock,
+    this.totalStockQuantity = 0,
+    this.isActive = true,
+    this.createdAt,
     required this.category,
     required this.brand,
     required this.averageRating,
@@ -80,9 +88,13 @@ class ProductListItem {
       slug: json['slug'] as String,
       thumbnailUrl: json['thumbnailUrl'] as String?,
       basePrice: _toDouble(json['basePrice']),
+      discountPrice: json['discountPrice'] != null ? _toDouble(json['discountPrice']) : null,
       minPrice: _toDouble(json['minPrice']),
       maxPrice: _toDouble(json['maxPrice']),
       inStock: json['inStock'] as bool? ?? false,
+      totalStockQuantity: json['totalStockQuantity'] as int? ?? 0,
+      isActive: json['isActive'] as bool? ?? true,
+      createdAt: json['createdAt'] != null ? DateTime.tryParse(json['createdAt'] as String) : null,
       category: Category.fromJson(json['category'] as Map<String, dynamic>),
       brand: Brand.fromJson(json['brand'] as Map<String, dynamic>),
       averageRating: _toDouble(json['averageRating']),
@@ -126,6 +138,9 @@ class ProductVariant {
 
 class ProductDetail extends ProductListItem {
   final String? description;
+  final List<String> images;
+  final String specifications;
+  final DateTime? updatedAt;
   final List<ProductVariant> variants;
 
   ProductDetail({
@@ -134,14 +149,21 @@ class ProductDetail extends ProductListItem {
     required super.slug,
     super.thumbnailUrl,
     required super.basePrice,
+    super.discountPrice,
     required super.minPrice,
     required super.maxPrice,
     required super.inStock,
+    super.totalStockQuantity = 0,
+    super.isActive = true,
+    super.createdAt,
     required super.category,
     required super.brand,
     required super.averageRating,
     required super.reviewCount,
     this.description,
+    this.images = const [],
+    this.specifications = '{}',
+    this.updatedAt,
     required this.variants,
   });
 
@@ -165,14 +187,21 @@ class ProductDetail extends ProductListItem {
       slug: item.slug,
       thumbnailUrl: item.thumbnailUrl,
       basePrice: item.basePrice,
+      discountPrice: item.discountPrice,
       minPrice: item.minPrice,
       maxPrice: item.maxPrice,
       inStock: item.inStock,
+      totalStockQuantity: item.totalStockQuantity,
+      isActive: item.isActive,
+      createdAt: item.createdAt,
       category: item.category,
       brand: item.brand,
       averageRating: item.averageRating,
       reviewCount: item.reviewCount,
       description: json['description'] as String?,
+      images: (json['images'] as List<dynamic>? ?? []).map((e) => e.toString()).toList(),
+      specifications: json['specifications'] as String? ?? '{}',
+      updatedAt: json['updatedAt'] != null ? DateTime.tryParse(json['updatedAt'] as String) : null,
       variants: (json['variants'] as List<dynamic>? ?? [])
           .map((v) => ProductVariant.fromJson(v as Map<String, dynamic>))
           .toList(),
@@ -211,4 +240,58 @@ class PagedResult<T> {
       totalPages: json['totalPages'] as int,
     );
   }
+}
+
+class CreateProductDto {
+  final String name;
+  final String categoryId;
+  final String brandId;
+  final double basePrice;
+  final double? discountPrice;
+  final int stockQuantity;
+  final String? sku;
+  final String? description;
+  final String specifications;
+  final bool isActive;
+
+  CreateProductDto({
+    required this.name,
+    required this.categoryId,
+    required this.brandId,
+    required this.basePrice,
+    this.discountPrice,
+    required this.stockQuantity,
+    this.sku,
+    this.description,
+    this.specifications = '{}',
+    this.isActive = true,
+  });
+}
+
+class UpdateProductDto {
+  final String name;
+  final String categoryId;
+  final String brandId;
+  final double basePrice;
+  final double? discountPrice;
+  final int stockQuantity;
+  final String? sku;
+  final String? description;
+  final String specifications;
+  final bool isActive;
+  final List<String> existingImages;
+
+  UpdateProductDto({
+    required this.name,
+    required this.categoryId,
+    required this.brandId,
+    required this.basePrice,
+    this.discountPrice,
+    required this.stockQuantity,
+    this.sku,
+    this.description,
+    this.specifications = '{}',
+    this.isActive = true,
+    this.existingImages = const [],
+  });
 }
