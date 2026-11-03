@@ -278,7 +278,7 @@ class AiChatResult {
 /// Dịch vụ kết nối Gemini AI (Hỗ trợ gọi Backend .NET API & Fallback trực tiếp chống lỗi)
 class GeminiService {
   static final String _baseUrl = SupabaseConfig.apiBaseUrl;
-  static const String _directGeminiApiKey = 'AIzaSyC60C1BjMnZ_IbqDEHFnmZlpFAozqgB1U4';
+  static const String _directGeminiApiKey = String.fromEnvironment('GEMINI_API_KEY', defaultValue: '');
   static const List<String> _geminiModels = [
     'gemini-flash-lite-latest',
     'gemini-3.5-flash-lite',
@@ -335,20 +335,22 @@ class GeminiService {
       debugPrint('Backend AI endpoint unreachable: $e. Thử gọi trực tiếp Google Gemini...');
     }
 
-    // 2. Fallback nếu Backend chưa bật: Gọi trực tiếp Google Gemini API từ App
-    try {
-      final directResult = await _callDirectGeminiCustomerChat(
-        message: message,
-        availableProducts: availableProducts,
-        categories: categories,
-        brands: brands,
-        history: history,
-      );
-      if (directResult != null) {
-        return directResult;
+    // 2. Fallback nếu Backend chưa bật: Gọi trực tiếp Google Gemini API từ App (chỉ khi có API Key)
+    if (_directGeminiApiKey.isNotEmpty) {
+      try {
+        final directResult = await _callDirectGeminiCustomerChat(
+          message: message,
+          availableProducts: availableProducts,
+          categories: categories,
+          brands: brands,
+          history: history,
+        );
+        if (directResult != null) {
+          return directResult;
+        }
+      } catch (e) {
+        debugPrint('Direct Gemini API call failed: $e. Chuyển sang Smart Local Engine...');
       }
-    } catch (e) {
-      debugPrint('Direct Gemini API call failed: $e. Chuyển sang Smart Local Engine...');
     }
 
     // 3. Fallback cấp 3: Bộ máy tư vấn dự phòng thông minh nội bộ

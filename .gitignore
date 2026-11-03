@@ -11,3 +11,7 @@ configTechGadgetSQL.txt
 appsettings.json
 appsettings.Development.json
 supabase_config.dart
+.env
+.env.*
+*.env
+!.env.example

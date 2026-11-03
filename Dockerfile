@@ -22,6 +22,7 @@ RUN dotnet publish "API.csproj" -c Release -o /app/publish /p:UseAppHost=false
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
+COPY .env* ./
 
 # Render tự động cấu hình PORT
 ENV ASPNETCORE_HTTP_PORTS=8080

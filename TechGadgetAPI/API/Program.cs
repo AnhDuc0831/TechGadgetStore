@@ -10,6 +10,37 @@ using Services.Interfaces;
 using System.Security.Claims;
 using System.Text;
 
+// 0. Tu dong nap file .env neu co (Render, Docker, Local)
+void LoadEnvFile(string path)
+{
+    try
+    {
+        if (!File.Exists(path)) return;
+        foreach (var rawLine in File.ReadAllLines(path))
+        {
+            var line = rawLine.Trim();
+            if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#')) continue;
+            var eq = line.IndexOf('=');
+            if (eq <= 0) continue;
+            var key = line[..eq].Trim();
+            var val = line[(eq + 1)..].Trim();
+            if (val.Length >= 2 && ((val.StartsWith('"') && val.EndsWith('"')) || (val.StartsWith('\'') && val.EndsWith('\''))))
+            {
+                val = val[1..^1];
+            }
+            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key)))
+            {
+                Environment.SetEnvironmentVariable(key, val);
+            }
+        }
+    }
+    catch { }
+}
+
+LoadEnvFile(".env");
+LoadEnvFile(Path.Combine(AppContext.BaseDirectory, ".env"));
+LoadEnvFile("../.env");
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Hỗ trợ Render và Cloud Container tự động gán cổng qua biến môi trường PORT
