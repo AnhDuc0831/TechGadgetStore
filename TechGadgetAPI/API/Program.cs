@@ -12,6 +12,10 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Hỗ trợ Render và Cloud Container tự động gán cổng qua biến môi trường PORT
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+builder.WebHost.UseUrls($"http://*:{port}");
+
 // 1. Controllers & API Documentation
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -128,14 +132,12 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "TechGadgetStore API v1");
-    });
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "TechGadgetStore API v1");
+    c.RoutePrefix = string.Empty; // Serve Swagger at root URL
+});
 
 //app.UseHttpsRedirection();
 
