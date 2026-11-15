@@ -62,6 +62,7 @@ public class DashboardDAO
         decimal totalProfit = 0;
         foreach (var order in successfulOrders)
         {
+            totalProfit -= order.DiscountAmount; // Voucher làm giảm lợi nhuận thực
             foreach (var item in order.OrderItems)
             {
                 var costPrice = item.CostPrice > 0
@@ -280,6 +281,7 @@ public class DashboardDAO
                 decimal dayProfit = 0;
                 foreach (var o in ordersOnDay)
                 {
+                    dayProfit -= o.DiscountAmount; // Voucher làm giảm lợi nhuận thực
                     foreach (var item in o.OrderItems)
                     {
                         var cost = item.CostPrice > 0
@@ -316,6 +318,7 @@ public class DashboardDAO
                 decimal prof = 0;
                 foreach (var o in g)
                 {
+                    prof -= o.DiscountAmount; // Voucher làm giảm lợi nhuận thực
                     foreach (var item in o.OrderItems)
                     {
                         var cost = item.CostPrice > 0

@@ -21,12 +21,16 @@ public static class DependencyInjection
             options.UseNpgsql(dataSource));
 
         // DAOs Registration
+        services.AddScoped<CategoryDAO>();
         services.AddScoped<ProfileDAO>();
         services.AddScoped<ProductDAO>();
         services.AddScoped<BrandDAO>();
         services.AddScoped<DashboardDAO>();
         services.AddScoped<CartDAO>();
         services.AddScoped<OrderDAO>();
+        services.AddScoped<VoucherDAO>();
+        services.AddScoped<ReviewDAO>();
+        services.AddScoped<NotificationDAO>();
 
         return services;
     }

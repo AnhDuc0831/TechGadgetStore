@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/cart.dart';
 import '../models/order.dart';
+import '../models/voucher.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/order_provider.dart';
+import '../services/voucher_api_service.dart';
 import '../utils/formatters.dart';
 import '../widgets/product_image.dart';
+import '../widgets/voucher_picker_sheet.dart';
 import 'cod_success_screen.dart';
 import 'location_picker_screen.dart';
 import 'payos_payment_screen.dart';
@@ -33,6 +36,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String _paymentMethod = 'PayOS'; // 'PayOS' | 'Cod'
   bool _isSubmitting = false;
 
+  // Voucher
+  final _voucherApi = VoucherApiService();
+  MyVoucher? _selectedVoucher;
+  int _applicableVoucherCount = 0;
+  bool _loadingVouchers = false;
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +53,43 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (profile.phone != null && profile.phone!.isNotEmpty) {
         _phoneController.text = profile.phone!;
       }
+    }
+    _autoPickBestVoucher();
+  }
+
+  /// Tự động gợi ý voucher giảm nhiều nhất trong ví (server đã sắp xếp sẵn)
+  Future<void> _autoPickBestVoucher() async {
+    final token = context.read<AuthProvider>().accessToken;
+    if (token == null) return;
+
+    setState(() => _loadingVouchers = true);
+    try {
+      final list = await _voucherApi.getMyVouchers(token, subtotal: _subtotal);
+      if (!mounted) return;
+      final applicable = list.where((v) => v.isApplicable == true).toList();
+      setState(() {
+        _applicableVoucherCount = applicable.length;
+        _selectedVoucher = applicable.isNotEmpty ? applicable.first : null;
+        _loadingVouchers = false;
+      });
+    } catch (_) {
+      // Không chặn checkout nếu không tải được voucher
+      if (mounted) setState(() => _loadingVouchers = false);
+    }
+  }
+
+  Future<void> _openVoucherPicker() async {
+    final token = context.read<AuthProvider>().accessToken;
+    if (token == null) return;
+
+    final result = await VoucherPickerSheet.show(
+      context,
+      accessToken: token,
+      subtotal: _subtotal,
+      selectedUserVoucherId: _selectedVoucher?.userVoucherId,
+    );
+    if (result != null && mounted) {
+      setState(() => _selectedVoucher = result.voucher);
     }
   }
 
@@ -61,9 +107,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         (sum, item) => sum + item.lineTotal,
       );
 
-  // Ước tính phí ship: 30,000đ; miễn phí nếu đơn hàng từ 500,000đ
+  // Ước tính phí ship: 30,000đ; miễn phí nếu đơn hàng từ 500,000đ (xét trên tiền hàng trước giảm giá)
   double get _estimatedShippingFee => _subtotal >= 500000 ? 0.0 : 30000.0;
-  double get _estimatedTotal => _subtotal + _estimatedShippingFee;
+  double get _voucherDiscount => _selectedVoucher?.estimatedDiscount ?? 0.0;
+  double get _estimatedTotal => _subtotal - _voucherDiscount + _estimatedShippingFee;
 
   Future<void> _openMapPicker() async {
     final selectedAddress = await Navigator.of(context).push<String>(
@@ -121,6 +168,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
       paymentMethod: _paymentMethod,
       selectedCartItemIds: widget.selectedItems.map((e) => e.id).toList(),
+      userVoucherId: _selectedVoucher?.userVoucherId,
     );
 
     try {
@@ -155,6 +203,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (!mounted) return;
       setState(() => _isSubmitting = false);
       final msg = e.toString().replaceFirst('Exception: ', '');
+      // Voucher không còn hợp lệ (vừa dùng ở đơn khác, hết hạn...) → tải lại để khách chọn lại
+      if (msg.toLowerCase().contains('voucher')) {
+        _autoPickBestVoucher();
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(msg),
@@ -200,6 +252,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       _buildSectionTitle('Phương thức thanh toán', theme),
                       const SizedBox(height: 8),
                       _buildPaymentMethodSelector(theme),
+                      const SizedBox(height: 20),
+
+                      // Voucher
+                      _buildSectionTitle('Voucher giảm giá', theme),
+                      const SizedBox(height: 8),
+                      _buildVoucherSelector(theme),
                       const SizedBox(height: 20),
 
                       // Tóm tắt chi phí
@@ -460,6 +518,54 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  Widget _buildVoucherSelector(ThemeData theme) {
+    final v = _selectedVoucher;
+
+    String subtitle;
+    if (_loadingVouchers) {
+      subtitle = 'Đang tìm voucher tốt nhất...';
+    } else if (v != null) {
+      subtitle = '${v.code} · Giảm ${formatVnd(_voucherDiscount)}';
+    } else if (_applicableVoucherCount > 0) {
+      subtitle = 'Bạn có $_applicableVoucherCount voucher dùng được';
+    } else {
+      subtitle = 'Chọn hoặc nhập mã voucher';
+    }
+
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: v != null ? Colors.orange.shade300 : Colors.grey.shade200),
+      ),
+      color: v != null ? Colors.orange.shade50 : null,
+      child: ListTile(
+        onTap: _isSubmitting ? null : _openVoucherPicker,
+        leading: Icon(Icons.local_offer_outlined, color: Colors.orange.shade700),
+        title: Text(
+          v?.name ?? 'Voucher của shop',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: v != null ? Colors.green.shade700 : Colors.grey.shade600,
+            fontWeight: v != null ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+        trailing: v != null
+            ? IconButton(
+                tooltip: 'Bỏ chọn voucher',
+                icon: const Icon(Icons.close, size: 20),
+                onPressed: _isSubmitting ? null : () => setState(() => _selectedVoucher = null),
+              )
+            : const Icon(Icons.arrow_forward_ios, size: 16),
+      ),
+    );
+  }
+
   Widget _buildPriceSummary(ThemeData theme) {
     return Card(
       elevation: 0,
@@ -478,6 +584,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 Text(formatVnd(_subtotal), style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
               ],
             ),
+            if (_voucherDiscount > 0) ...[
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Voucher ${_selectedVoucher?.code ?? ''}:', style: theme.textTheme.bodyMedium),
+                  Text(
+                    '-${formatVnd(_voucherDiscount)}',
+                    style: TextStyle(fontWeight: FontWeight.w600, color: Colors.green.shade700),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

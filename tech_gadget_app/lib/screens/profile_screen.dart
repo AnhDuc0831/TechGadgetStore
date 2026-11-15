@@ -4,6 +4,8 @@ import '../providers/auth_provider.dart';
 import 'admin_dashboard_screen.dart';
 import 'login_screen.dart';
 import 'orders_screen.dart';
+import 'voucher_center_screen.dart';
+import 'pending_reviews_screen.dart';
 import '../widgets/customer_ai_chat_modal.dart';
 import '../widgets/admin_analytics_chat_modal.dart';
 
@@ -483,6 +485,62 @@ class ProfileScreen extends StatelessWidget {
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const OrdersScreen()),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Kho voucher & Ví voucher
+                    Card(
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      child: ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.local_offer_outlined, color: Colors.orange.shade700),
+                        ),
+                        title: const Text(
+                          'Kho voucher',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: const Text('Săn voucher giảm giá & xem ví voucher của bạn'),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const VoucherCenterScreen()),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Sản phẩm chờ đánh giá
+                    Card(
+                      elevation: 1,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      child: ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.star_outline_rounded, color: Colors.amber.shade800),
+                        ),
+                        title: const Text(
+                          'Chờ đánh giá',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: const Text('Đánh giá các sản phẩm bạn đã nhận'),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const PendingReviewsScreen()),
                           );
                         },
                       ),

@@ -22,6 +22,26 @@ public class Review
     [Column("comment")]
     public string? Comment { get; set; }
 
+    /// <summary>Đơn hàng đã hoàn thành chứng minh khách đã mua sản phẩm.</summary>
+    [Column("order_id")]
+    public Guid? OrderId { get; set; }
+
+    [Column("variant_sku")]
+    public string? VariantSku { get; set; }
+
+    [Column("images")]
+    public List<string> Images { get; set; } = new();
+
+    [Column("edited_at")]
+    public DateTimeOffset? EditedAt { get; set; }
+
+    /// <summary>Phản hồi công khai của Shop (Shop không được ẩn/xóa đánh giá).</summary>
+    [Column("admin_reply")]
+    public string? AdminReply { get; set; }
+
+    [Column("replied_at")]
+    public DateTimeOffset? RepliedAt { get; set; }
+
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 

@@ -17,18 +17,28 @@ public class OrderService : IOrderService
     private readonly IPayOSService _payOSService;
     private readonly ShippingOptions _shippingOptions;
     private readonly ILogger<OrderService> _logger;
+    private readonly INotificationService? _notifications;
+
+    /// <summary>Số đơn tối đa cho 1 lần cập nhật trạng thái hàng loạt.</summary>
+    public const int MaxBulkOrders = 100;
 
     public OrderService(
         IOrderRepository orderRepo,
         IPayOSService payOSService,
         IOptions<ShippingOptions> shippingOptions,
-        ILogger<OrderService> logger)
+        ILogger<OrderService> logger,
+        INotificationService? notifications = null)
     {
         _orderRepo = orderRepo;
         _payOSService = payOSService;
         _shippingOptions = shippingOptions.Value;
         _logger = logger;
+        _notifications = notifications;
     }
+
+    /// <summary>Gửi thông báo nếu có service (NotificationService tự nuốt lỗi, không ảnh hưởng nghiệp vụ).</summary>
+    private Task NotifyAsync(Func<INotificationService, Task> send) =>
+        _notifications == null ? Task.CompletedTask : send(_notifications);
 
     public async Task<CheckoutResponse> CheckoutAsync(Guid userId, CheckoutRequest request)
     {
@@ -71,24 +81,30 @@ public class OrderService : IOrderService
             paymentLinkId: null,
             checkoutUrl: null);
 
-        // Re-check if subtotal qualifies for free shipping
-        var subtotal = order.TotalAmount - calculatedShippingFee;
+        // Re-check if subtotal qualifies for free shipping.
+        // Xét theo tiền hàng TRƯỚC khi giảm voucher để khách không bị mất freeship vì dùng voucher.
+        var subtotal = order.Subtotal ?? (order.TotalAmount - calculatedShippingFee + order.DiscountAmount);
         if (_shippingOptions.FreeShippingThreshold > 0 && subtotal >= _shippingOptions.FreeShippingThreshold)
         {
             order.ShippingFee = 0;
-            order.TotalAmount = subtotal;
+            order.TotalAmount = subtotal - order.DiscountAmount;
             await _orderRepo.UpdateOrderAsync(order);
         }
 
         // 3. If COD, return customer-facing DTO
         if (request.PaymentMethod == PaymentMethod.Cod)
         {
+            // Đơn COD: báo Admin ngay. (Đơn PayOS chỉ báo Admin khi đã thanh toán thành công.)
+            await NotifyAsync(n => n.OnOrderPlacedAsync(order));
+
             return new CheckoutResponse
             {
                 OrderId = order.Id,
                 OrderCode = null,
                 TotalAmount = order.TotalAmount,
                 ShippingFee = order.ShippingFee,
+                DiscountAmount = order.DiscountAmount,
+                VoucherCode = order.VoucherCode,
                 PaymentMethod = order.PaymentMethod,
                 PaymentStatus = OrderStatusMapper.ToCanonical(order.PaymentStatus),
                 OrderStatus = OrderStatusMapper.ToCanonical(order.Status),
@@ -129,6 +145,8 @@ public class OrderService : IOrderService
                 OrderCode = orderCode,
                 TotalAmount = order.TotalAmount,
                 ShippingFee = order.ShippingFee,
+                DiscountAmount = order.DiscountAmount,
+                VoucherCode = order.VoucherCode,
                 PaymentMethod = order.PaymentMethod,
                 PaymentStatus = OrderStatusMapper.ToCanonical(order.PaymentStatus),
                 OrderStatus = OrderStatusMapper.ToCanonical(order.Status),
@@ -303,7 +321,19 @@ public class OrderService : IOrderService
         }
 
         // Restore stock and mark cancelled
-        return await _orderRepo.CancelOrderAndRestoreStockAsync(orderId, reason ?? "Khách hàng hủy đơn");
+        var cancelled = await _orderRepo.CancelOrderAndRestoreStockAsync(orderId, reason ?? "Khách hàng hủy đơn");
+        if (cancelled)
+        {
+            if (isAdmin && order.UserId != userId)
+            {
+                await NotifyAsync(n => n.OnOrderStatusChangedAsync(order, CanonicalOrderStatus.Cancelled));
+            }
+            else
+            {
+                await NotifyAsync(n => n.OnOrderCancelledByCustomerAsync(order, reason));
+            }
+        }
+        return cancelled;
     }
 
     public async Task<bool> ProcessPayOSWebhookAsync(Webhook? webhook)
@@ -414,6 +444,7 @@ public class OrderService : IOrderService
 
         await _orderRepo.UpdateOrderAsync(order);
         _logger.LogInformation("Thanh toán PayOS thành công qua {Source} cho đơn hàng {OrderId} (code: {OrderCode})", source, order.Id, order.PayOSOrderCode);
+        await NotifyAsync(n => n.OnOrderPaidAsync(order));
         return true;
     }
 
@@ -502,6 +533,7 @@ public class OrderService : IOrderService
                     ? refundNote
                     : $"{order.InternalNote} | {refundNote}";
                 await _orderRepo.UpdateOrderAsync(order);
+                await NotifyAsync(n => n.OnOrderStatusChangedAsync(order, CanonicalOrderStatus.Cancelled, refundRequired: true));
                 return MapToAdminDto(order);
             }
             else
@@ -522,6 +554,7 @@ public class OrderService : IOrderService
                 await _orderRepo.CancelOrderAndRestoreStockAsync(orderId, "Admin cancelled order");
                 order = await _orderRepo.GetOrderByIdAsync(orderId) ?? order;
                 order.Status = OrderStatus.Cancelled;
+                await NotifyAsync(n => n.OnOrderStatusChangedAsync(order, CanonicalOrderStatus.Cancelled));
                 return MapToAdminDto(order);
             }
         }
@@ -534,8 +567,50 @@ public class OrderService : IOrderService
                 order.PaidAt = DateTimeOffset.UtcNow;
             }
             await _orderRepo.UpdateOrderAsync(order);
+            await NotifyAsync(n => n.OnOrderStatusChangedAsync(order, newStatus));
             return MapToAdminDto(order);
         }
+    }
+
+    /// <summary>
+    /// Admin: cập nhật trạng thái nhiều đơn cùng lúc. Mỗi đơn được xử lý độc lập qua đúng luồng
+    /// <see cref="UpdateOrderStatusAsync"/> (kiểm tra chuyển trạng thái, hoàn kho, hủy link PayOS, gửi thông báo),
+    /// đơn lỗi không làm hỏng các đơn còn lại.
+    /// </summary>
+    public async Task<BulkUpdateOrderStatusResult> BulkUpdateOrderStatusAsync(IEnumerable<Guid> orderIds, CanonicalOrderStatus newStatus)
+    {
+        var ids = (orderIds ?? Enumerable.Empty<Guid>()).Where(id => id != Guid.Empty).Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            throw new InvalidOperationException("Vui lòng chọn ít nhất một đơn hàng.");
+        }
+        if (ids.Count > MaxBulkOrders)
+        {
+            throw new InvalidOperationException($"Chỉ được cập nhật tối đa {MaxBulkOrders} đơn mỗi lần.");
+        }
+
+        var result = new BulkUpdateOrderStatusResult { Total = ids.Count, TargetStatus = newStatus };
+
+        // Xử lý tuần tự: DbContext không an toàn khi chạy song song
+        foreach (var id in ids)
+        {
+            try
+            {
+                var updated = await UpdateOrderStatusAsync(id, newStatus);
+                result.Items.Add(new BulkUpdateOrderStatusItem { OrderId = id, Success = true, Status = updated.Status });
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException)
+            {
+                result.Items.Add(new BulkUpdateOrderStatusItem { OrderId = id, Success = false, Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi cập nhật hàng loạt cho đơn {OrderId}", id);
+                result.Items.Add(new BulkUpdateOrderStatusItem { OrderId = id, Success = false, Message = "Lỗi hệ thống khi cập nhật đơn này." });
+            }
+        }
+
+        return result;
     }
 
     public async Task<OrderDto> ConfirmReceivedAsync(Guid orderId, Guid userId)
@@ -565,6 +640,7 @@ public class OrderService : IOrderService
         }
         order.UpdatedAt = DateTimeOffset.UtcNow;
         await _orderRepo.UpdateOrderAsync(order);
+        await NotifyAsync(n => n.OnOrderReceivedAsync(order));
         return MapToCustomerDto(order);
     }
 
@@ -583,6 +659,7 @@ public class OrderService : IOrderService
                     await _payOSService.CancelPaymentLinkAsync(order.PayOSOrderCode.Value, "Hết hạn thanh toán (quá 15 phút)");
                 }
                 await _orderRepo.CancelOrderAndRestoreStockAsync(order.Id, "Hết hạn thanh toán (quá 15 phút)");
+                await NotifyAsync(n => n.OnOrderExpiredAsync(order));
                 count++;
             }
             catch (Exception ex)
@@ -612,6 +689,9 @@ public class OrderService : IOrderService
             PaymentStatus = OrderStatusMapper.ToCanonical(o.PaymentStatus),
             TotalAmount = o.TotalAmount,
             ShippingFee = o.ShippingFee,
+            Subtotal = o.Subtotal ?? (o.TotalAmount - o.ShippingFee + o.DiscountAmount),
+            DiscountAmount = o.DiscountAmount,
+            VoucherCode = o.VoucherCode,
             ShippingName = shippingName,
             ShippingPhone = shippingPhone,
             ShippingAddress = shippingAddress,
@@ -623,6 +703,7 @@ public class OrderService : IOrderService
             {
                 Id = i.Id,
                 ProductVariantId = i.ProductVariantId,
+                ProductId = i.ProductVariant?.ProductId,
                 ProductName = i.ProductName,
                 Sku = i.Sku,
                 UnitPrice = i.UnitPrice,
@@ -655,6 +736,9 @@ public class OrderService : IOrderService
             PaymentStatus = OrderStatusMapper.ToCanonical(o.PaymentStatus),
             TotalAmount = o.TotalAmount,
             ShippingFee = o.ShippingFee,
+            Subtotal = o.Subtotal ?? (o.TotalAmount - o.ShippingFee + o.DiscountAmount),
+            DiscountAmount = o.DiscountAmount,
+            VoucherCode = o.VoucherCode,
             ShippingName = shippingName,
             ShippingPhone = shippingPhone,
             ShippingAddress = shippingAddress,
@@ -668,6 +752,7 @@ public class OrderService : IOrderService
             {
                 Id = i.Id,
                 ProductVariantId = i.ProductVariantId,
+                ProductId = i.ProductVariant?.ProductId,
                 ProductName = i.ProductName,
                 Sku = i.Sku,
                 UnitPrice = i.UnitPrice,

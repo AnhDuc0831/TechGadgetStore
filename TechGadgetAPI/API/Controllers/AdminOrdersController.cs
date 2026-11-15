@@ -64,6 +64,30 @@ public class AdminOrdersController : ControllerBase
     }
 
     /// <summary>
+    /// Admin: Cập nhật trạng thái NHIỀU đơn cùng lúc (tối đa 100 đơn).
+    /// Mỗi đơn được kiểm tra riêng theo luồng chuyển trạng thái hợp lệ; đơn không hợp lệ được báo lỗi
+    /// trong kết quả và không ảnh hưởng các đơn khác.
+    /// </summary>
+    [HttpPut("bulk-status")]
+    [ProducesResponseType(typeof(BulkUpdateOrderStatusResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> BulkUpdateOrderStatus([FromBody] BulkUpdateOrderStatusRequest request)
+    {
+        var (isAdmin, error) = await VerifyAdminAsync();
+        if (!isAdmin) return error!;
+
+        try
+        {
+            var result = await _orderService.BulkUpdateOrderStatusAsync(request.OrderIds, request.Status);
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Admin: Cập nhật trạng thái đơn hàng (Confirmed, Shipping, Completed, Cancelled...).
     /// </summary>
     [HttpPut("{id:guid}/status")]

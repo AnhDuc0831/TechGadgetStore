@@ -93,6 +93,14 @@ class CodSuccessScreen extends StatelessWidget {
                           ],
                           _buildRow('Hình thức thanh toán:', 'Thanh toán khi nhận hàng (COD)'),
                           const Divider(height: 16),
+                          if (result.discountAmount > 0) ...[
+                            _buildRow(
+                              'Voucher ${result.voucherCode ?? ''}:',
+                              '-${formatVnd(result.discountAmount)}',
+                              valueColor: Colors.green.shade700,
+                            ),
+                            const Divider(height: 16),
+                          ],
                           _buildRow('Phí vận chuyển:', formatVnd(result.shippingFee)),
                           const Divider(height: 16),
                           _buildRow(

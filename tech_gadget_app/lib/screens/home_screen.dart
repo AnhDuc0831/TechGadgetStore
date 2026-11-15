@@ -12,6 +12,7 @@ import 'product_detail_screen.dart';
 import 'profile_screen.dart';
 import '../widgets/customer_ai_chat_modal.dart';
 import '../widgets/admin_analytics_chat_modal.dart';
+import '../widgets/notification_bell.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -201,6 +202,8 @@ class _HomeScreenState extends State<HomeScreen> {
         titleSpacing: 12,
         title: _buildSearchField(theme),
         actions: [
+          // Chuông thông báo (đơn hàng mới cho Admin, trạng thái đơn cho Khách)
+          NotificationBell(color: theme.colorScheme.onPrimary),
           // Nút Dashboard nhanh cho Admin trên AppBar
           Consumer<AuthProvider>(
             builder: (context, auth, _) {

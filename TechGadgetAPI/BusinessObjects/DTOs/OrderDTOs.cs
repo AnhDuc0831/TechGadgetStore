@@ -81,6 +81,9 @@ public class CheckoutRequest
     public decimal? ShippingFee { get; set; }
     public PaymentMethod PaymentMethod { get; set; } = PaymentMethod.Cod;
     public List<Guid> SelectedCartItemIds { get; set; } = new();
+
+    /// <summary>Id voucher trong ví (user_vouchers.id) muốn áp dụng. Tuỳ chọn.</summary>
+    public Guid? UserVoucherId { get; set; }
 }
 
 public class CheckoutResponse
@@ -89,6 +92,8 @@ public class CheckoutResponse
     public long? OrderCode { get; set; }
     public decimal TotalAmount { get; set; }
     public decimal ShippingFee { get; set; }
+    public decimal DiscountAmount { get; set; }
+    public string? VoucherCode { get; set; }
     public PaymentMethod PaymentMethod { get; set; }
     public CanonicalPaymentStatus PaymentStatus { get; set; }
     public CanonicalOrderStatus OrderStatus { get; set; }
@@ -106,6 +111,9 @@ public class OrderDto
     public CanonicalPaymentStatus PaymentStatus { get; set; }
     public decimal TotalAmount { get; set; }
     public decimal ShippingFee { get; set; }
+    public decimal Subtotal { get; set; }
+    public decimal DiscountAmount { get; set; }
+    public string? VoucherCode { get; set; }
     public string? ShippingName { get; set; }
     public string? ShippingPhone { get; set; }
     public string ShippingAddress { get; set; } = string.Empty;
@@ -131,6 +139,8 @@ public class OrderItemDto
 {
     public Guid Id { get; set; }
     public Guid ProductVariantId { get; set; }
+    /// <summary>Id sản phẩm (để mở trang đánh giá). Chỉ có ở API chi tiết đơn.</summary>
+    public Guid? ProductId { get; set; }
     public string ProductName { get; set; } = string.Empty;
     public string Sku { get; set; } = string.Empty;
     public decimal UnitPrice { get; set; }
@@ -153,4 +163,35 @@ public class PaymentStatusResponse
 public class UpdateOrderStatusRequest
 {
     public CanonicalOrderStatus Status { get; set; }
+}
+
+// =====================================================================
+// CẬP NHẬT TRẠNG THÁI HÀNG LOẠT (ADMIN)
+// =====================================================================
+
+public class BulkUpdateOrderStatusRequest
+{
+    public List<Guid> OrderIds { get; set; } = new();
+    public CanonicalOrderStatus Status { get; set; }
+}
+
+public class BulkUpdateOrderStatusItem
+{
+    public Guid OrderId { get; set; }
+    public bool Success { get; set; }
+
+    /// <summary>Trạng thái mới (khi thành công).</summary>
+    public CanonicalOrderStatus? Status { get; set; }
+
+    /// <summary>Lý do thất bại (VD: không thể chuyển từ Shipping sang Confirmed).</summary>
+    public string? Message { get; set; }
+}
+
+public class BulkUpdateOrderStatusResult
+{
+    public CanonicalOrderStatus TargetStatus { get; set; }
+    public int Total { get; set; }
+    public int SuccessCount => Items.Count(i => i.Success);
+    public int FailedCount => Items.Count(i => !i.Success);
+    public List<BulkUpdateOrderStatusItem> Items { get; set; } = new();
 }

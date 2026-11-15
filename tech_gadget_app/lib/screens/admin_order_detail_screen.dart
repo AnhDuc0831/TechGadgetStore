@@ -688,7 +688,7 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
   }
 
   Widget _buildPaymentDetailCard(AdminOrderModel order, ThemeData theme) {
-    final subtotal = order.items.fold(0.0, (sum, i) => sum + i.totalPrice);
+    final subtotal = order.subtotal;
 
     return Card(
       elevation: 0,
@@ -703,6 +703,14 @@ class _AdminOrderDetailScreenState extends State<AdminOrderDetailScreen> {
           children: [
             if (order.items.isNotEmpty) ...[
               _buildSummaryLine('Tạm tính sản phẩm', formatVnd(subtotal)),
+              const SizedBox(height: 8),
+            ],
+            if (order.hasVoucher) ...[
+              _buildSummaryLine(
+                'Voucher ${order.voucherCode ?? ''}',
+                '-${formatVnd(order.discountAmount)}',
+                valueColor: Colors.green.shade700,
+              ),
               const SizedBox(height: 8),
             ],
             _buildSummaryLine(

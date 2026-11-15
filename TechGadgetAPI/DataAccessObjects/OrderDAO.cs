@@ -1,5 +1,6 @@
 using BusinessObjects.DTOs;
 using BusinessObjects.Enums;
+using BusinessObjects.Helpers;
 using BusinessObjects.Models;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
@@ -88,7 +89,37 @@ public class OrderDAO
             });
         }
 
-        var totalAmount = subtotal + shippingFee;
+        // 3. Voucher (tuỳ chọn): kiểm tra & tính giảm giá ngay trong transaction
+        decimal discountAmount = 0;
+        string? voucherCode = null;
+        if (request.UserVoucherId.HasValue)
+        {
+            var userVoucher = await _context.UserVouchers
+                .AsNoTracking()
+                .Include(uv => uv.Voucher)
+                .FirstOrDefaultAsync(uv => uv.Id == request.UserVoucherId.Value && uv.UserId == userId);
+
+            if (userVoucher == null)
+            {
+                throw new InvalidOperationException("Không tìm thấy voucher trong ví của bạn.");
+            }
+
+            if (userVoucher.Status != UserVoucherStatus.Available)
+            {
+                throw new InvalidOperationException("Voucher này đã được sử dụng cho một đơn hàng khác.");
+            }
+
+            var reason = VoucherCalculator.GetIneligibleReason(userVoucher.Voucher, subtotal, now);
+            if (reason != null)
+            {
+                throw new InvalidOperationException($"Không thể áp dụng voucher {userVoucher.Voucher.Code}: {reason}");
+            }
+
+            discountAmount = VoucherCalculator.CalculateDiscount(userVoucher.Voucher, subtotal);
+            voucherCode = userVoucher.Voucher.Code;
+        }
+
+        var totalAmount = subtotal - discountAmount + shippingFee;
 
         // Ensure ShippingAddress is valid JSON (column is jsonb)
         string shippingAddressJson;
@@ -114,6 +145,9 @@ public class OrderDAO
             Status = OrderStatus.Pending,
             ShippingFee = shippingFee,
             TotalAmount = totalAmount,
+            Subtotal = subtotal,
+            DiscountAmount = discountAmount,
+            VoucherCode = voucherCode,
             ShippingAddress = shippingAddressJson,
             ShippingName = request.ShippingName,
             ShippingPhone = request.ShippingPhone,
@@ -134,6 +168,28 @@ public class OrderDAO
         _context.CartItems.RemoveRange(selectedItems);
 
         await _context.SaveChangesAsync();
+
+        // 4. Đánh dấu voucher đã dùng bằng UPDATE có điều kiện (sau khi đơn đã được insert để thỏa FK order_id).
+        //    Nếu 2 request checkout cùng dùng 1 voucher, chỉ 1 request cập nhật được → request còn lại rollback toàn bộ.
+        if (request.UserVoucherId.HasValue)
+        {
+            var marked = await _context.UserVouchers
+                .Where(uv => uv.Id == request.UserVoucherId.Value
+                             && uv.UserId == userId
+                             && uv.Status == UserVoucherStatus.Available)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(uv => uv.Status, UserVoucherStatus.Used)
+                    .SetProperty(uv => uv.OrderId, orderId)
+                    .SetProperty(uv => uv.DiscountAmount, discountAmount)
+                    .SetProperty(uv => uv.UsedAt, now));
+
+            if (marked == 0)
+            {
+                // Không commit → transaction tự rollback khi dispose (hoàn kho, khôi phục giỏ hàng)
+                throw new InvalidOperationException("Voucher này vừa được sử dụng cho một đơn hàng khác. Vui lòng chọn voucher khác.");
+            }
+        }
+
         await transaction.CommitAsync();
 
         return order;
@@ -216,6 +272,18 @@ public class OrderDAO
                 item.ProductVariant.StockQuantity += item.Quantity;
                 item.ProductVariant.UpdatedAt = DateTimeOffset.UtcNow;
             }
+        }
+
+        // Hoàn voucher về ví khách (nếu đơn có dùng voucher)
+        var usedVouchers = await _context.UserVouchers
+            .Where(uv => uv.OrderId == orderId && uv.Status == UserVoucherStatus.Used)
+            .ToListAsync();
+        foreach (var uv in usedVouchers)
+        {
+            uv.Status = UserVoucherStatus.Available;
+            uv.OrderId = null;
+            uv.DiscountAmount = null;
+            uv.UsedAt = null;
         }
 
         order.Status = OrderStatus.Cancelled;
