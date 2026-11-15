@@ -21,6 +21,18 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
   static const int _pageSize = 10;
   String _selectedStatusFilter = 'all';
 
+  // ── Chọn nhiều đơn để cập nhật hàng loạt ──
+  bool _selectionMode = false;
+  final Set<String> _selectedIds = {};
+  bool _bulkRunning = false;
+
+  static const _bulkActions = <String, (String, IconData, Color)>{
+    'Confirmed': ('Xác nhận', Icons.check_circle_outline, Colors.indigo),
+    'Shipping': ('Giao hàng', Icons.local_shipping_outlined, Colors.orange),
+    'Completed': ('Hoàn thành', Icons.task_alt, Colors.green),
+    'Cancelled': ('Hủy đơn', Icons.cancel_outlined, Colors.red),
+  };
+
   final Map<String, String> _statusFilterOptions = {
     'all': 'Tất cả',
     'Pending': 'Chờ xử lý',
@@ -41,7 +53,10 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     final token = auth.accessToken;
     if (token == null) return;
 
-    setState(() => _currentPage = page);
+    setState(() {
+      _currentPage = page;
+      _selectedIds.clear(); // đổi trang / bộ lọc → bỏ chọn để tránh cập nhật nhầm đơn không nhìn thấy
+    });
 
     await context.read<OrderProvider>().loadAdminOrders(
       token,
@@ -74,7 +89,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: _selectionMode ? _buildSelectionAppBar() : AppBar(
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -84,12 +99,18 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.checklist_rounded),
+            tooltip: 'Chọn nhiều đơn',
+            onPressed: () => setState(() => _selectionMode = true),
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Tải lại',
             onPressed: () => _fetchAdminOrders(page: _currentPage),
           ),
         ],
       ),
+      bottomNavigationBar: _selectionMode ? _buildBulkActionBar() : null,
       body: Column(
         children: [
           // Filter Chips
@@ -211,7 +232,214 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     );
   }
 
+  // ── CHỌN NHIỀU & CẬP NHẬT HÀNG LOẠT ─────────────────────────────────────
+
+  List<AdminOrderModel> get _visibleOrders => context.read<OrderProvider>().adminOrders?.items ?? [];
+
+  String _orderLabel(String id) {
+    final match = _visibleOrders.where((o) => o.id == id).toList();
+    final code = match.isNotEmpty ? match.first.payosOrderCode : null;
+    return code != null ? '#$code' : '#${id.length >= 8 ? id.substring(0, 8).toUpperCase() : id}';
+  }
+
+  void _toggleSelect(String id) {
+    setState(() {
+      if (!_selectedIds.remove(id)) _selectedIds.add(id);
+    });
+  }
+
+  void _exitSelection() {
+    setState(() {
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  PreferredSizeWidget _buildSelectionAppBar() {
+    final visibleIds = (context.watch<OrderProvider>().adminOrders?.items ?? []).map((o) => o.id).toSet();
+    final allSelected = visibleIds.isNotEmpty && visibleIds.every(_selectedIds.contains);
+
+    return AppBar(
+      leading: IconButton(icon: const Icon(Icons.close), tooltip: 'Thoát chọn', onPressed: _bulkRunning ? null : _exitSelection),
+      title: Text('Đã chọn ${_selectedIds.length} đơn'),
+      actions: [
+        TextButton.icon(
+          onPressed: _bulkRunning || visibleIds.isEmpty
+              ? null
+              : () => setState(() {
+                    if (allSelected) {
+                      _selectedIds.removeAll(visibleIds);
+                    } else {
+                      _selectedIds.addAll(visibleIds);
+                    }
+                  }),
+          icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
+          label: Text(allSelected ? 'Bỏ chọn' : 'Chọn trang này'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBulkActionBar() {
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: Colors.grey.shade200)),
+        ),
+        child: _bulkRunning
+            ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                    SizedBox(width: 12),
+                    Text('Đang cập nhật các đơn đã chọn...'),
+                  ],
+                ),
+              )
+            : Row(
+                children: _bulkActions.entries.map((e) {
+                  final (label, icon, color) = e.value;
+                  return Expanded(
+                    child: TextButton(
+                      onPressed: _selectedIds.isEmpty ? null : () => _runBulk(e.key, label),
+                      style: TextButton.styleFrom(foregroundColor: color, padding: const EdgeInsets.symmetric(vertical: 6)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(icon, size: 22),
+                          const SizedBox(height: 2),
+                          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+      ),
+    );
+  }
+
+  Future<void> _runBulk(String status, String label) async {
+    final count = _selectedIds.length;
+    final isCancel = status == 'Cancelled';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$label $count đơn hàng?'),
+        content: Text(
+          isCancel
+              ? 'Các đơn hợp lệ sẽ bị hủy, tồn kho và voucher được hoàn lại. Đơn đã thanh toán sẽ được đánh dấu cần hoàn tiền.\n\n'
+                  'Đơn không thể chuyển sang trạng thái này sẽ được bỏ qua và báo lại.'
+              : 'Đơn không thể chuyển sang trạng thái "$label" sẽ được bỏ qua và báo lại.\n'
+                  'Khách hàng của các đơn thành công sẽ nhận được thông báo.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy bỏ')),
+          FilledButton(
+            style: isCancel ? FilledButton.styleFrom(backgroundColor: Colors.red) : null,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(label),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final token = context.read<AuthProvider>().accessToken;
+    if (token == null) return;
+
+    // Lưu nhãn mã đơn trước khi danh sách được tải lại
+    final labels = {for (final id in _selectedIds) id: _orderLabel(id)};
+
+    setState(() => _bulkRunning = true);
+    try {
+      final result = await context.read<OrderProvider>().bulkUpdateOrderStatus(token, _selectedIds.toList(), status);
+      if (!mounted) return;
+      setState(() {
+        _bulkRunning = false;
+        _selectionMode = false;
+        _selectedIds.clear();
+      });
+      await _fetchAdminOrders(page: _currentPage);
+      if (!mounted) return;
+      _showBulkResult(result, label, labels);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _bulkRunning = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red.shade700),
+      );
+    }
+  }
+
+  void _showBulkResult(BulkUpdateResult result, String label, Map<String, String> labels) {
+    if (result.failedCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$label thành công ${result.successCount}/${result.total} đơn.'),
+          backgroundColor: Colors.green.shade600,
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Kết quả: ${result.successCount}/${result.total} đơn thành công'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Text('${result.failedCount} đơn không cập nhật được:',
+                  style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              ...result.failures.map((f) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.error_outline, size: 16, color: Colors.red.shade400),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text.rich(TextSpan(children: [
+                            TextSpan(
+                                text: '${labels[f.orderId] ?? f.orderId}: ',
+                                style: const TextStyle(fontWeight: FontWeight.bold)),
+                            TextSpan(text: f.message ?? 'Không rõ lỗi'),
+                          ])),
+                        ),
+                      ],
+                    ),
+                  )),
+            ],
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Đóng'))],
+      ),
+    );
+  }
+
   Widget _buildAdminOrderCard(AdminOrderModel order, ThemeData theme) {
+    final card = _buildAdminOrderCardInner(order, theme);
+    if (!_selectionMode) return card;
+
+    final selected = _selectedIds.contains(order.id);
+    return Row(
+      children: [
+        Checkbox(value: selected, onChanged: _bulkRunning ? null : (_) => _toggleSelect(order.id)),
+        Expanded(child: card),
+      ],
+    );
+  }
+
+  Widget _buildAdminOrderCardInner(AdminOrderModel order, ThemeData theme) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       elevation: 0,
@@ -224,7 +452,18 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
+        // Nhấn giữ để bắt đầu chọn nhiều đơn
+        onLongPress: _selectionMode
+            ? null
+            : () => setState(() {
+                  _selectionMode = true;
+                  _selectedIds.add(order.id);
+                }),
         onTap: () async {
+          if (_selectionMode) {
+            if (!_bulkRunning) _toggleSelect(order.id);
+            return;
+          }
           final changed = await Navigator.of(context).push<bool>(
             MaterialPageRoute(
               builder: (_) => AdminOrderDetailScreen(orderId: order.id),

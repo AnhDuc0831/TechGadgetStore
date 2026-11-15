@@ -23,6 +23,16 @@ public class Order
     [Column("total_amount", TypeName = "numeric(14,2)")]
     public decimal TotalAmount { get; set; }
 
+    /// <summary>Tổng tiền hàng trước giảm giá và phí ship (null với đơn cũ trước khi có voucher).</summary>
+    [Column("subtotal", TypeName = "numeric(14,2)")]
+    public decimal? Subtotal { get; set; }
+
+    [Column("discount_amount", TypeName = "numeric(14,2)")]
+    public decimal DiscountAmount { get; set; } = 0;
+
+    [Column("voucher_code")]
+    public string? VoucherCode { get; set; }
+
     [Required]
     [Column("shipping_address", TypeName = "jsonb")]
     public string ShippingAddress { get; set; } = null!;

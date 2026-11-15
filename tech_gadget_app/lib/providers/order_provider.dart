@@ -221,5 +221,15 @@ class OrderProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Admin cập nhật trạng thái nhiều đơn cùng lúc.
+  /// Không bật cờ loading toàn màn hình; màn hình gọi tự hiển thị tiến trình và tải lại danh sách sau đó.
+  Future<BulkUpdateResult> bulkUpdateOrderStatus(
+    String token,
+    List<String> orderIds,
+    String newStatus,
+  ) {
+    return _service.bulkUpdateOrderStatus(token, orderIds, newStatus);
+  }
 }
 

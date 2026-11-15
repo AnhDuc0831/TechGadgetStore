@@ -176,9 +176,13 @@ class OrderItemModel {
   final int quantity;
   final double totalPrice;
 
+  /// Id sản phẩm (để mở màn đánh giá) – chỉ có trong API chi tiết đơn
+  final String? productId;
+
   OrderItemModel({
     required this.id,
     required this.productVariantId,
+    this.productId,
     required this.productName,
     required this.sku,
     required this.unitPrice,
@@ -196,6 +200,7 @@ class OrderItemModel {
     return OrderItemModel(
       id: json['id'] as String? ?? '',
       productVariantId: json['productVariantId'] as String? ?? '',
+      productId: json['productId'] as String?,
       productName: json['productName'] as String? ?? '',
       sku: json['sku'] as String? ?? '',
       unitPrice: unitPrice,
@@ -223,6 +228,13 @@ class OrderModel {
   final String? checkoutUrl;
   final List<OrderItemModel> items;
 
+  /// Giảm giá từ voucher (0 nếu không dùng voucher)
+  final double discountAmount;
+  final String? voucherCode;
+
+  /// Tiền hàng trước giảm giá do server trả về (null với dữ liệu cũ)
+  final double? serverSubtotal;
+
   OrderModel({
     required this.id,
     required this.status,
@@ -238,7 +250,18 @@ class OrderModel {
     this.paidAt,
     this.checkoutUrl,
     required this.items,
+    this.discountAmount = 0,
+    this.voucherCode,
+    this.serverSubtotal,
   });
+
+  /// Tạm tính sản phẩm (trước giảm giá & phí ship)
+  double get subtotal =>
+      (serverSubtotal != null && serverSubtotal! > 0)
+          ? serverSubtotal!
+          : items.fold(0.0, (sum, i) => sum + i.totalPrice);
+
+  bool get hasVoucher => discountAmount > 0;
 
   OrderStatusEnum get statusEnum => OrderStatusEnum.fromString(status);
   PaymentStatusEnum get paymentStatusEnum =>
@@ -355,6 +378,9 @@ class OrderModel {
       paidAt: parseNullableDate(json['paidAt']),
       checkoutUrl: json['checkoutUrl'] as String?,
       items: items,
+      discountAmount: _toDouble(json['discountAmount']),
+      voucherCode: json['voucherCode'] as String?,
+      serverSubtotal: (json['subtotal'] as num?)?.toDouble(),
     );
   }
 }
@@ -383,6 +409,9 @@ class AdminOrderModel extends OrderModel {
     super.paidAt,
     super.checkoutUrl,
     required super.items,
+    super.discountAmount,
+    super.voucherCode,
+    super.serverSubtotal,
     this.userId,
     this.payosOrderCode,
     this.paymentLinkId,
@@ -408,6 +437,9 @@ class AdminOrderModel extends OrderModel {
       paidAt: base.paidAt,
       checkoutUrl: base.checkoutUrl,
       items: base.items,
+      discountAmount: base.discountAmount,
+      voucherCode: base.voucherCode,
+      serverSubtotal: base.serverSubtotal,
       userId: json['userId'] as String?,
       payosOrderCode: _toInt(json['payOSOrderCode'] ?? json['payosOrderCode']),
       paymentLinkId: json['paymentLinkId'] as String?,
@@ -426,6 +458,9 @@ class CheckoutRequest {
   final String paymentMethod; // "Cod" | "PayOS"
   final List<String> selectedCartItemIds;
 
+  /// Id voucher trong ví (userVoucherId) muốn áp dụng, null nếu không dùng
+  final String? userVoucherId;
+
   CheckoutRequest({
     required this.shippingName,
     required this.shippingPhone,
@@ -433,6 +468,7 @@ class CheckoutRequest {
     this.note,
     required this.paymentMethod,
     required this.selectedCartItemIds,
+    this.userVoucherId,
   });
 
   Map<String, dynamic> toJson() {
@@ -445,6 +481,9 @@ class CheckoutRequest {
     };
     if (note != null && note!.trim().isNotEmpty) {
       map['note'] = note!.trim();
+    }
+    if (userVoucherId != null && userVoucherId!.isNotEmpty) {
+      map['userVoucherId'] = userVoucherId;
     }
     return map;
   }
@@ -463,12 +502,16 @@ class CheckoutResult {
   final String? qrCode;
   final String? paymentLinkId;
   final OrderModel? order;
+  final double discountAmount;
+  final String? voucherCode;
 
   CheckoutResult({
     required this.orderId,
     this.orderCode,
     required this.totalAmount,
     required this.shippingFee,
+    this.discountAmount = 0,
+    this.voucherCode,
     required this.paymentMethod,
     required this.paymentStatus,
     required this.orderStatus,
@@ -491,6 +534,8 @@ class CheckoutResult {
       orderCode: _toInt(json['orderCode']),
       totalAmount: _toDouble(json['totalAmount']),
       shippingFee: _toDouble(json['shippingFee']),
+      discountAmount: _toDouble(json['discountAmount']),
+      voucherCode: json['voucherCode'] as String?,
       paymentMethod: json['paymentMethod'] as String? ?? 'Cod',
       paymentStatus: json['paymentStatus'] as String? ?? 'Pending',
       orderStatus: json['orderStatus'] as String? ?? 'Pending',
@@ -779,3 +824,43 @@ class ParsedShippingInfo {
   ParsedShippingInfo({this.name, this.phone, required this.address});
 }
 
+
+/// Kết quả PUT /api/admin/orders/bulk-status
+class BulkUpdateResult {
+  final int total;
+  final int successCount;
+  final int failedCount;
+  final List<BulkUpdateItem> items;
+
+  BulkUpdateResult({
+    required this.total,
+    required this.successCount,
+    required this.failedCount,
+    required this.items,
+  });
+
+  List<BulkUpdateItem> get failures => items.where((i) => !i.success).toList();
+
+  factory BulkUpdateResult.fromJson(Map<String, dynamic> json) => BulkUpdateResult(
+        total: _toInt(json['total']) ?? 0,
+        successCount: _toInt(json['successCount']) ?? 0,
+        failedCount: _toInt(json['failedCount']) ?? 0,
+        items: (json['items'] as List<dynamic>? ?? [])
+            .map((e) => BulkUpdateItem.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+class BulkUpdateItem {
+  final String orderId;
+  final bool success;
+  final String? message;
+
+  BulkUpdateItem({required this.orderId, required this.success, this.message});
+
+  factory BulkUpdateItem.fromJson(Map<String, dynamic> json) => BulkUpdateItem(
+        orderId: json['orderId'] as String? ?? '',
+        success: json['success'] as bool? ?? false,
+        message: json['message'] as String?,
+      );
+}

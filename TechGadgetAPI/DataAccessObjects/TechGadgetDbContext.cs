@@ -21,6 +21,9 @@ public class TechGadgetDbContext : DbContext
     public virtual DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public virtual DbSet<Review> Reviews => Set<Review>();
     public virtual DbSet<Favorite> Favorites => Set<Favorite>();
+    public virtual DbSet<Voucher> Vouchers => Set<Voucher>();
+    public virtual DbSet<UserVoucher> UserVouchers => Set<UserVoucher>();
+    public virtual DbSet<AppNotification> Notifications => Set<AppNotification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -82,6 +85,23 @@ public class TechGadgetDbContext : DbContext
         modelBuilder.Entity<OrderItem>(entity =>
         {
             entity.HasIndex(e => e.OrderId);
+        });
+
+        modelBuilder.Entity<Voucher>(entity =>
+        {
+            entity.HasIndex(e => e.Code).IsUnique();
+        });
+
+        modelBuilder.Entity<UserVoucher>(entity =>
+        {
+            entity.HasIndex(e => new { e.VoucherId, e.UserId }).IsUnique();
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.OrderId);
+        });
+
+        modelBuilder.Entity<AppNotification>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.CreatedAt });
         });
     }
 }

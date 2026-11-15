@@ -7,6 +7,10 @@ import '../providers/auth_provider.dart';
 import '../services/dashboard_api_service.dart';
 import 'admin_orders_screen.dart';
 import 'admin_products_screen.dart';
+import 'admin_vouchers_screen.dart';
+import 'admin_reviews_screen.dart';
+import 'admin_catalog_screen.dart';
+import '../widgets/notification_bell.dart';
 import '../widgets/admin_analytics_chat_modal.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -96,6 +100,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ],
         ),
         actions: [
+          const NotificationBell(),
           IconButton(
             tooltip: 'AI Cố vấn Thống kê CSDL',
             icon: const Icon(Icons.auto_awesome, color: Color(0xFF60A5FA)),
@@ -116,6 +121,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const AdminOrdersScreen()),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: 'Quản lý voucher',
+            icon: const Icon(Icons.local_offer_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AdminVouchersScreen()),
               );
             },
           ),
@@ -263,6 +277,102 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const AdminOrdersScreen()),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Nút chuyển nhanh vào Quản lý voucher
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: Colors.orange.shade100),
+              ),
+              color: Colors.orange.shade50,
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.local_offer_outlined, color: Colors.orange.shade800),
+                ),
+                title: Text(
+                  'Quản lý voucher',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade900),
+                ),
+                subtitle: const Text('Đăng voucher, giới hạn số suất & theo dõi lượt dùng'),
+                trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.orange.shade900),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AdminVouchersScreen()),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Nút chuyển nhanh vào Quản lý đánh giá
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: Colors.amber.shade100),
+              ),
+              color: Colors.amber.shade50,
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.reviews_outlined, color: Colors.amber.shade900),
+                ),
+                title: Text(
+                  'Quản lý đánh giá',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber.shade900),
+                ),
+                subtitle: const Text('Phản hồi công khai đánh giá của khách hàng'),
+                trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.amber.shade900),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AdminReviewsScreen()),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Nút chuyển nhanh vào Quản lý danh mục & thương hiệu
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: Colors.teal.shade100),
+              ),
+              color: Colors.teal.shade50,
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.teal.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.category_outlined, color: Colors.teal.shade800),
+                ),
+                title: Text(
+                  'Danh mục & Thương hiệu',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal.shade900),
+                ),
+                subtitle: const Text('Thêm, sửa, xóa danh mục sản phẩm và thương hiệu'),
+                trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.teal.shade900),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AdminCatalogScreen()),
                   );
                 },
               ),

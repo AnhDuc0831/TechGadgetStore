@@ -9,6 +9,7 @@ import '../utils/formatters.dart';
 import '../widgets/product_card.dart';
 import '../widgets/product_image.dart';
 import '../widgets/rating_stars.dart';
+import '../widgets/product_review_section.dart';
 import '../widgets/customer_ai_chat_modal.dart';
 
 class ProductDetailScreen extends StatefulWidget {
@@ -308,6 +309,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             ],
                           )
                         : info,
+                    const Divider(height: 40),
+                    ProductReviewSection(
+                      productId: product.id,
+                      productName: product.name,
+                      thumbnailUrl: product.thumbnailUrl,
+                    ),
                     if (_sameBrandProducts.isNotEmpty) ...[
                       const Divider(height: 40),
                       _buildSameBrandProducts(product, theme),

@@ -20,6 +20,9 @@ public static class DependencyInjection
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<IPayOSService, PayOSService>();
         services.AddScoped<IOrderService, OrderService>();
+        services.AddScoped<IVoucherService, VoucherService>();
+        services.AddScoped<IReviewService, ReviewService>();
+        services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<ICloudinaryService, CloudinaryService>();
         services.AddHostedService<PayOSOrderCleanupHostedService>();
 

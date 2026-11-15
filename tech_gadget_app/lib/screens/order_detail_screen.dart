@@ -7,6 +7,7 @@ import '../providers/order_provider.dart';
 import '../utils/formatters.dart';
 import 'order_tracking_map_screen.dart';
 import 'payos_payment_screen.dart';
+import 'write_review_screen.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -626,6 +627,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         '${formatVnd(item.unitPrice)} x ${item.quantity}',
                         style: const TextStyle(fontSize: 13, color: Colors.black87),
                       ),
+                      if (order.statusEnum == OrderStatusEnum.completed && item.productId != null) ...[
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => WriteReviewScreen(
+                                  productId: item.productId!,
+                                  productName: item.productName,
+                                ),
+                              ),
+                            );
+                          },
+                          icon: Icon(Icons.star_outline_rounded, size: 18, color: Colors.amber.shade800),
+                          label: const Text('Đánh giá'),
+                          style: OutlinedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            foregroundColor: Colors.amber.shade900,
+                            side: BorderSide(color: Colors.amber.shade300),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -646,7 +669,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _buildPaymentDetailCard(OrderModel order, ThemeData theme) {
-    final subtotal = order.items.fold(0.0, (sum, i) => sum + i.totalPrice);
+    final subtotal = order.subtotal;
 
     return Card(
       elevation: 0,
@@ -661,6 +684,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           children: [
             _buildSummaryLine('Tạm tính sản phẩm', formatVnd(subtotal)),
             const SizedBox(height: 8),
+            if (order.hasVoucher) ...[
+              _buildSummaryLine(
+                'Voucher ${order.voucherCode ?? ''}',
+                '-${formatVnd(order.discountAmount)}',
+                valueColor: Colors.green.shade700,
+              ),
+              const SizedBox(height: 8),
+            ],
             _buildSummaryLine(
               'Phí vận chuyển',
               order.shippingFee == 0 ? 'Miễn phí' : formatVnd(order.shippingFee),

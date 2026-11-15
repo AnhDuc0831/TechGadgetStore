@@ -223,6 +223,25 @@ class OrderService {
     }
   }
 
+  /// PUT /api/admin/orders/bulk-status – Admin cập nhật trạng thái nhiều đơn cùng lúc
+  Future<BulkUpdateResult> bulkUpdateOrderStatus(
+    String accessToken,
+    List<String> orderIds,
+    String newStatus,
+  ) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$_baseUrl/api/admin/orders/bulk-status'),
+        headers: _headers(accessToken),
+        body: jsonEncode({'orderIds': orderIds, 'status': newStatus}),
+      );
+      _throwIfError(response);
+      return BulkUpdateResult.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    } on SocketException {
+      throw Exception('Không thể kết nối đến máy chủ. Vui lòng kiểm tra mạng.');
+    }
+  }
+
   /// PUT /api/admin/orders/{id}/status – Admin cập nhật trạng thái đơn hàng
   Future<AdminOrderModel> updateOrderStatus(
     String accessToken,
