@@ -12,14 +12,17 @@ namespace Services.Implementations;
 /// Quy tắc:
 ///  1. Chỉ khách có đơn ĐÃ HOÀN THÀNH chứa sản phẩm mới được đánh giá.
 ///  2. Mỗi khách 1 đánh giá / sản phẩm, được sửa (hiển thị "đã chỉnh sửa").
-///  3. Shop KHÔNG được ẩn/xóa/sửa đánh giá, chỉ được phản hồi công khai.
+///  3. Shop KHÔNG được xóa/sửa đánh giá. Shop được phản hồi công khai, và được ẨN NỘI DUNG
+///     (bình luận + ảnh) của đánh giá khiếm nhã – số sao vẫn hiển thị. Nội dung gốc không bị xóa.
+///     Khách tự sửa lại đánh giá (qua bộ lọc) thì nội dung tự động được hiện lại.
 ///  4. Nội dung vi phạm (SĐT, email, link, từ thô tục, spam) bị chặn tự động lúc gửi.
-///  5. Mọi đánh giá đều được tính vào điểm trung bình.
+///  5. Mọi đánh giá (kể cả đã ẩn nội dung) đều được tính vào điểm trung bình.
 /// </summary>
 public class ReviewService : IReviewService
 {
     public const int MaxImages = 5;
     public const int MaxReplyLength = 1000;
+    public const int MaxHiddenReasonLength = 200;
     public const int RateLimitCount = 5;
     public static readonly TimeSpan RateLimitWindow = TimeSpan.FromMinutes(10);
     private const string ImageFolder = "tech_gadgets/reviews";
@@ -160,6 +163,10 @@ public class ReviewService : IReviewService
             existing.Comment = comment;
             existing.Images = images;
             existing.EditedAt = now;
+            // Khách đã sửa lại (nội dung mới đã qua bộ lọc) → hiện lại. Admin có thể ẩn lần nữa nếu vẫn vi phạm.
+            existing.ContentHidden = false;
+            existing.HiddenReason = null;
+            existing.HiddenAt = null;
             if (purchase != null)
             {
                 existing.OrderId = purchase.Value.OrderId;
@@ -241,6 +248,26 @@ public class ReviewService : IReviewService
         return MapToAdminDto(review);
     }
 
+    public async Task<AdminReviewDto> SetContentHiddenAsync(Guid reviewId, bool hidden, string? reason)
+    {
+        var review = await _reviewRepo.GetByIdAsync(reviewId)
+                     ?? throw new KeyNotFoundException("Không tìm thấy đánh giá.");
+
+        var text = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        if (hidden && text != null && text.Length > MaxHiddenReasonLength)
+        {
+            throw new InvalidOperationException($"Lý do ẩn tối đa {MaxHiddenReasonLength} ký tự.");
+        }
+
+        // Chỉ đổi trạng thái hiển thị – KHÔNG xóa/sửa bình luận, ảnh hay số sao của khách
+        review.ContentHidden = hidden;
+        review.HiddenReason = hidden ? text : null;
+        review.HiddenAt = hidden ? Now : null;
+        await _reviewRepo.UpdateAsync(review);
+
+        return MapToAdminDto(review);
+    }
+
     // =====================================================================
     // HELPERS
     // =====================================================================
@@ -265,24 +292,33 @@ public class ReviewService : IReviewService
         }
     }
 
-    private static ReviewDto MapToDto(Review r, Guid? currentUserId) => Fill(new ReviewDto(), r, currentUserId);
+    private static ReviewDto MapToDto(Review r, Guid? currentUserId) =>
+        Fill(new ReviewDto(), r, currentUserId, revealHidden: currentUserId.HasValue && r.UserId == currentUserId.Value);
 
     private static AdminReviewDto MapToAdminDto(Review r)
     {
-        var dto = Fill(new AdminReviewDto(), r, null);
+        var dto = Fill(new AdminReviewDto(), r, null, revealHidden: true);
         dto.ProductName = r.Product?.Name ?? string.Empty;
         dto.ProductThumbnailUrl = r.Product?.ThumbnailUrl;
         dto.OrderId = r.OrderId;
         return dto;
     }
 
-    private static T Fill<T>(T dto, Review r, Guid? currentUserId) where T : ReviewDto
+    /// <param name="revealHidden">
+    /// true cho chủ đánh giá và Admin: vẫn nhận nội dung gốc + lý do ẩn.
+    /// false cho người xem công khai: nội dung bị ẩn không được gửi ra khỏi server.
+    /// </param>
+    private static T Fill<T>(T dto, Review r, Guid? currentUserId, bool revealHidden) where T : ReviewDto
     {
+        var masked = r.ContentHidden && !revealHidden;
+
         dto.Id = r.Id;
         dto.ProductId = r.ProductId;
         dto.Rating = r.Rating;
-        dto.Comment = r.Comment;
-        dto.Images = r.Images ?? new List<string>();
+        dto.Comment = masked ? null : r.Comment;
+        dto.Images = masked ? new List<string>() : r.Images ?? new List<string>();
+        dto.IsContentHidden = r.ContentHidden;
+        dto.HiddenReason = r.ContentHidden && revealHidden ? r.HiddenReason : null;
         dto.ReviewerName = ReviewContentFilter.MaskName(r.User?.FullName);
         dto.ReviewerAvatarUrl = r.User?.AvatarUrl;
         dto.VariantSku = r.VariantSku;

@@ -15,4 +15,7 @@ public interface IReviewService
     // Admin
     Task<PagedResult<AdminReviewDto>> GetAdminReviewsAsync(AdminReviewQueryParams query);
     Task<AdminReviewDto> ReplyAsync(Guid reviewId, string? reply);
+
+    /// <summary>Ẩn / hiện nội dung (bình luận + ảnh) của đánh giá khiếm nhã. Số sao luôn được giữ.</summary>
+    Task<AdminReviewDto> SetContentHiddenAsync(Guid reviewId, bool hidden, string? reason);
 }

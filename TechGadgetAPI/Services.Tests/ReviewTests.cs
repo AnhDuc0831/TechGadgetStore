@@ -271,6 +271,132 @@ public class ReviewServiceTests
         Assert.Null(review.AdminReply);
         Assert.Null(review.RepliedAt);
     }
+
+    // ---------------- ẨN NỘI DUNG KHIẾM NHÃ ----------------
+
+    private Review OffensiveReview() => new()
+    {
+        Id = Guid.NewGuid(), ProductId = _productId, UserId = _userId, Rating = 1,
+        Comment = "Nội dung khiếm nhã", Images = new() { "https://img/bad.jpg" }, CreatedAt = Now.AddDays(-1)
+    };
+
+    [Fact]
+    public async Task AdminHide_KeepsRatingAndOriginalContent_RecordsReason()
+    {
+        var review = OffensiveReview();
+        _repo.Setup(r => r.GetByIdAsync(review.Id)).ReturnsAsync(review);
+
+        var dto = await _service.SetContentHiddenAsync(review.Id, true, "  Ngôn từ khiếm nhã  ");
+
+        Assert.True(review.ContentHidden);
+        Assert.Equal("Ngôn từ khiếm nhã", review.HiddenReason);
+        Assert.Equal(Now, review.HiddenAt);
+        Assert.Equal(1, review.Rating);                       // số sao giữ nguyên
+        Assert.Equal("Nội dung khiếm nhã", review.Comment);   // không xóa nội dung gốc
+        Assert.Single(review.Images);
+        // Admin vẫn xem được nội dung gốc + lý do
+        Assert.True(dto.IsContentHidden);
+        Assert.Equal("Nội dung khiếm nhã", dto.Comment);
+        Assert.Equal("Ngôn từ khiếm nhã", dto.HiddenReason);
+        _repo.Verify(r => r.UpdateAsync(review), Times.Once);
+    }
+
+    [Fact]
+    public async Task AdminUnhide_ClearsReasonAndTimestamp()
+    {
+        var review = OffensiveReview();
+        review.ContentHidden = true;
+        review.HiddenReason = "Spam";
+        review.HiddenAt = Now.AddHours(-1);
+        _repo.Setup(r => r.GetByIdAsync(review.Id)).ReturnsAsync(review);
+
+        var dto = await _service.SetContentHiddenAsync(review.Id, false, "bỏ qua");
+
+        Assert.False(review.ContentHidden);
+        Assert.Null(review.HiddenReason);
+        Assert.Null(review.HiddenAt);
+        Assert.False(dto.IsContentHidden);
+    }
+
+    [Fact]
+    public async Task AdminHide_ReasonTooLong_IsRejected()
+    {
+        var review = OffensiveReview();
+        _repo.Setup(r => r.GetByIdAsync(review.Id)).ReturnsAsync(review);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            _service.SetContentHiddenAsync(review.Id, true, new string('x', ReviewService.MaxHiddenReasonLength + 1)));
+        Assert.False(review.ContentHidden);
+    }
+
+    [Fact]
+    public async Task AdminHide_UnknownReview_Throws()
+    {
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => _service.SetContentHiddenAsync(Guid.NewGuid(), true, null));
+    }
+
+    [Fact]
+    public async Task ProductReviews_HiddenContent_IsMaskedForPublic_ButVisibleToAuthor()
+    {
+        var review = OffensiveReview();
+        review.ContentHidden = true;
+        review.HiddenReason = "Ngôn từ khiếm nhã";
+        _repo.Setup(r => r.GetProductReviewsAsync(_productId, 1, 10, null, false))
+            .ReturnsAsync((new List<Review> { review }, 1));
+        _repo.Setup(r => r.GetSummaryAsync(_productId))
+            .ReturnsAsync((new Dictionary<int, int> { [1] = 1 }, 0));
+
+        // Người xem khác: không nhận được nội dung, ảnh hay lý do – nhưng vẫn thấy số sao
+        var publicView = (await _service.GetProductReviewsAsync(_productId, new ReviewQueryParams(), Guid.NewGuid())).Reviews.Items.Single();
+        Assert.True(publicView.IsContentHidden);
+        Assert.Null(publicView.Comment);
+        Assert.Empty(publicView.Images);
+        Assert.Null(publicView.HiddenReason);
+        Assert.Equal(1, publicView.Rating);
+
+        // Khách chưa đăng nhập cũng vậy
+        var anonymous = (await _service.GetProductReviewsAsync(_productId, new ReviewQueryParams(), null)).Reviews.Items.Single();
+        Assert.Null(anonymous.Comment);
+
+        // Chính người viết: thấy nội dung gốc + lý do để sửa lại
+        var authorView = (await _service.GetProductReviewsAsync(_productId, new ReviewQueryParams(), _userId)).Reviews.Items.Single();
+        Assert.Equal("Nội dung khiếm nhã", authorView.Comment);
+        Assert.Equal("Ngôn từ khiếm nhã", authorView.HiddenReason);
+    }
+
+    [Fact]
+    public async Task ProductReviews_HiddenReview_StillCountsInAverage()
+    {
+        _repo.Setup(r => r.GetProductReviewsAsync(_productId, 1, 10, null, false))
+            .ReturnsAsync((new List<Review>(), 0));
+        // Summary lấy theo mọi đánh giá, không lọc ContentHidden → 1★ bị ẩn nội dung vẫn kéo điểm xuống
+        _repo.Setup(r => r.GetSummaryAsync(_productId))
+            .ReturnsAsync((new Dictionary<int, int> { [5] = 1, [1] = 1 }, 0));
+
+        var result = await _service.GetProductReviewsAsync(_productId, new ReviewQueryParams(), null);
+
+        Assert.Equal(2, result.Summary.TotalCount);
+        Assert.Equal(3.0, result.Summary.AverageRating);
+    }
+
+    [Fact]
+    public async Task CustomerEdit_OfHiddenReview_UnhidesAutomatically()
+    {
+        GivenPurchased();
+        var review = OffensiveReview();
+        review.ContentHidden = true;
+        review.HiddenReason = "Ngôn từ khiếm nhã";
+        review.HiddenAt = Now.AddHours(-2);
+        _repo.Setup(r => r.GetUserReviewAsync(_productId, _userId)).ReturnsAsync(review);
+
+        var dto = await _service.SubmitReviewAsync(_productId, _userId,
+            new SubmitReviewRequest { Rating = 2, Comment = "Sản phẩm chưa tốt như mong đợi" });
+
+        Assert.False(review.ContentHidden);
+        Assert.Null(review.HiddenReason);
+        Assert.Null(review.HiddenAt);
+        Assert.False(dto.IsContentHidden);
+    }
 }
 
 public class ReviewImageFromMobileTests

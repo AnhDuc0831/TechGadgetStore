@@ -7,8 +7,9 @@ using System.Security.Claims;
 namespace API.Controllers;
 
 /// <summary>
-/// Admin: Xem & phản hồi đánh giá.
-/// Thiết kế có chủ đích: KHÔNG có API ẩn, xóa hay sửa đánh giá của khách để đảm bảo minh bạch.
+/// Admin: Xem, phản hồi & ẩn nội dung khiếm nhã của đánh giá.
+/// Thiết kế có chủ đích: KHÔNG có API xóa hay sửa đánh giá của khách. Admin chỉ ẩn được phần nội dung
+/// (bình luận + ảnh); số sao luôn hiển thị và luôn tính vào điểm trung bình để đảm bảo minh bạch.
 /// </summary>
 [ApiController]
 [Authorize]
@@ -91,6 +92,39 @@ public class AdminReviewsController : ControllerBase
         {
             _logger.LogError(ex, "Lỗi khi phản hồi đánh giá {ReviewId}", id);
             return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Không thể lưu phản hồi." });
+        }
+    }
+
+    /// <summary>
+    /// Admin: ẩn / hiện NỘI DUNG (bình luận + ảnh) của đánh giá khiếm nhã.
+    /// Số sao vẫn hiển thị và vẫn tính điểm trung bình; nội dung gốc không bị xóa.
+    /// Body: { "hidden": true, "reason": "Ngôn từ khiếm nhã" }
+    /// </summary>
+    [HttpPut("{id:guid}/visibility")]
+    [ProducesResponseType(typeof(AdminReviewDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SetVisibility(Guid id, [FromBody] SetReviewContentVisibilityRequest request)
+    {
+        var (isAdmin, error) = await VerifyAdminAsync();
+        if (!isAdmin) return error!;
+
+        try
+        {
+            return Ok(await _reviewService.SetContentHiddenAsync(id, request.Hidden, request.Reason));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi ẩn/hiện đánh giá {ReviewId}", id);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Không thể cập nhật trạng thái đánh giá." });
         }
     }
 }

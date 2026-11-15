@@ -148,4 +148,15 @@ class ReviewApiService {
     _throwIfError(response);
     return AdminReview.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
+
+  /// Admin: ẩn / hiện nội dung (bình luận + ảnh) của đánh giá khiếm nhã. Số sao luôn được giữ.
+  Future<AdminReview> setContentHidden(String accessToken, String reviewId, bool hidden, {String? reason}) async {
+    final response = await http.put(
+      Uri.parse('$_baseUrl/api/admin/reviews/$reviewId/visibility'),
+      headers: _headers(accessToken),
+      body: jsonEncode({'hidden': hidden, 'reason': reason}),
+    );
+    _throwIfError(response);
+    return AdminReview.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
 }

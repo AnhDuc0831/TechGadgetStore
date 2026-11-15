@@ -39,6 +39,13 @@ class Review {
   final DateTime? repliedAt;
   final bool isMine;
 
+  /// Shop đã ẩn nội dung (bình luận + ảnh) vì khiếm nhã; số sao vẫn hiển thị.
+  /// Người xem công khai nhận comment = null, images rỗng. Chủ đánh giá & Admin vẫn nhận nội dung gốc.
+  final bool isContentHidden;
+
+  /// Lý do ẩn – chỉ có với chủ đánh giá và Admin.
+  final String? hiddenReason;
+
   Review({
     required this.id,
     required this.productId,
@@ -54,6 +61,8 @@ class Review {
     this.adminReply,
     this.repliedAt,
     required this.isMine,
+    this.isContentHidden = false,
+    this.hiddenReason,
   });
 
   bool get isEdited => editedAt != null;
@@ -74,6 +83,8 @@ class Review {
         adminReply: json['adminReply'] as String?,
         repliedAt: _parseNullableDate(json['repliedAt']),
         isMine: json['isMine'] as bool? ?? false,
+        isContentHidden: json['isContentHidden'] as bool? ?? false,
+        hiddenReason: json['hiddenReason'] as String?,
       );
 }
 
@@ -96,6 +107,8 @@ class AdminReview extends Review {
     super.editedAt,
     super.adminReply,
     super.repliedAt,
+    super.isContentHidden,
+    super.hiddenReason,
     required this.productName,
     this.productThumbnailUrl,
   }) : super(isMine: false);
@@ -116,6 +129,8 @@ class AdminReview extends Review {
       editedAt: b.editedAt,
       adminReply: b.adminReply,
       repliedAt: b.repliedAt,
+      isContentHidden: b.isContentHidden,
+      hiddenReason: b.hiddenReason,
       productName: json['productName'] as String? ?? '',
       productThumbnailUrl: json['productThumbnailUrl'] as String?,
     );

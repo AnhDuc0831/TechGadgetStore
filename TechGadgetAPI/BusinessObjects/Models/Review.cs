@@ -35,12 +35,25 @@ public class Review
     [Column("edited_at")]
     public DateTimeOffset? EditedAt { get; set; }
 
-    /// <summary>Phản hồi công khai của Shop (Shop không được ẩn/xóa đánh giá).</summary>
+    /// <summary>Phản hồi công khai của Shop (Shop không được xóa/sửa đánh giá).</summary>
     [Column("admin_reply")]
     public string? AdminReply { get; set; }
 
     [Column("replied_at")]
     public DateTimeOffset? RepliedAt { get; set; }
+
+    /// <summary>
+    /// Admin đã ẩn nội dung (bình luận + ảnh) vì khiếm nhã. Số sao vẫn hiển thị và vẫn tính điểm trung bình.
+    /// Nội dung gốc không bị xóa.
+    /// </summary>
+    [Column("content_hidden")]
+    public bool ContentHidden { get; set; }
+
+    [Column("hidden_reason")]
+    public string? HiddenReason { get; set; }
+
+    [Column("hidden_at")]
+    public DateTimeOffset? HiddenAt { get; set; }
 
     [Column("created_at")]
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;

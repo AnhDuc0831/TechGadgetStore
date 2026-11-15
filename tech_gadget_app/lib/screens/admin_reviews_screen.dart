@@ -6,8 +6,9 @@ import '../providers/auth_provider.dart';
 import '../services/review_api_service.dart';
 import '../widgets/review_widgets.dart';
 
-/// Admin: Xem & phản hồi đánh giá.
-/// Có chủ đích KHÔNG có chức năng ẩn/xóa/sửa đánh giá của khách – Shop chỉ phản hồi công khai.
+/// Admin: Xem, phản hồi & ẩn nội dung khiếm nhã của đánh giá.
+/// Có chủ đích KHÔNG có chức năng xóa/sửa đánh giá của khách. Shop chỉ ẩn được phần nội dung
+/// (bình luận + ảnh); số sao vẫn hiển thị và vẫn tính điểm trung bình.
 class AdminReviewsScreen extends StatefulWidget {
   const AdminReviewsScreen({super.key});
 
@@ -180,6 +181,92 @@ class _AdminReviewsScreenState extends State<AdminReviewsScreen> {
     }
   }
 
+  /// Ẩn (kèm lý do) hoặc hiện lại nội dung đánh giá. Số sao luôn được giữ.
+  Future<void> _toggleHidden(AdminReview review) async {
+    final hiding = !review.isContentHidden;
+    String? reason;
+
+    if (hiding) {
+      final ctrl = TextEditingController();
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Ẩn nội dung đánh giá?'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Bình luận và ảnh sẽ bị ẩn với khách hàng khác. Số sao (${review.rating}★) vẫn hiển thị và vẫn được '
+                  'tính vào điểm trung bình. Nội dung gốc không bị xóa, bạn có thể hiện lại bất cứ lúc nào.',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    for (final t in ['Ngôn từ khiếm nhã', 'Xúc phạm người khác', 'Spam / quảng cáo', 'Hình ảnh không phù hợp'])
+                      ActionChip(
+                        label: Text(t, style: const TextStyle(fontSize: 11)),
+                        onPressed: () => ctrl.text = t,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: ctrl,
+                  maxLength: 200,
+                  decoration: const InputDecoration(
+                    labelText: 'Lý do (tuỳ chọn)',
+                    hintText: 'Người viết sẽ thấy lý do này',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: Colors.orange.shade700),
+              child: const Text('Ẩn nội dung'),
+            ),
+          ],
+        ),
+      );
+      reason = ctrl.text.trim().isEmpty ? null : ctrl.text.trim();
+      Future.delayed(const Duration(milliseconds: 500), ctrl.dispose);
+      if (confirmed != true || !mounted) return;
+    }
+
+    final token = context.read<AuthProvider>().accessToken;
+    if (token == null) return;
+
+    try {
+      final updated = await _api.setContentHidden(token, review.id, hiding, reason: reason);
+      if (!mounted) return;
+      setState(() {
+        final idx = _items.indexWhere((x) => x.id == review.id);
+        if (idx >= 0) _items[idx] = updated;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(hiding ? 'Đã ẩn nội dung đánh giá (vẫn giữ số sao).' : 'Đã hiện lại nội dung đánh giá.'),
+          backgroundColor: Colors.green.shade600,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: Colors.red.shade700),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -238,7 +325,8 @@ class _AdminReviewsScreenState extends State<AdminReviewsScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Đảm bảo minh bạch: Shop không thể ẩn, xóa hay sửa đánh giá của khách – chỉ có thể phản hồi công khai.',
+                    'Đảm bảo minh bạch: Shop không thể xóa hay sửa đánh giá. Với nội dung khiếm nhã, Shop chỉ ẩn được '
+                    'bình luận & ảnh – số sao vẫn hiển thị và vẫn tính điểm trung bình.',
                     style: TextStyle(fontSize: 11, color: Colors.blue.shade800),
                   ),
                 ),
@@ -324,13 +412,25 @@ class _AdminReviewsScreenState extends State<AdminReviewsScreen> {
                     child: ReviewCard(
                       review: r,
                       productName: r.productName,
-                      footer: Align(
-                        alignment: Alignment.centerRight,
-                        child: FilledButton.tonalIcon(
-                          onPressed: () => _openReply(r),
-                          icon: Icon(r.hasReply ? Icons.edit_outlined : Icons.reply, size: 18),
-                          label: Text(r.hasReply ? 'Sửa phản hồi' : 'Phản hồi'),
-                        ),
+                      footer: Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () => _toggleHidden(r),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: r.isContentHidden ? Colors.green.shade700 : Colors.orange.shade800,
+                            ),
+                            icon: Icon(r.isContentHidden ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 18),
+                            label: Text(r.isContentHidden ? 'Hiện lại' : 'Ẩn nội dung'),
+                          ),
+                          FilledButton.tonalIcon(
+                            onPressed: () => _openReply(r),
+                            icon: Icon(r.hasReply ? Icons.edit_outlined : Icons.reply, size: 18),
+                            label: Text(r.hasReply ? 'Sửa phản hồi' : 'Phản hồi'),
+                          ),
+                        ],
                       ),
                     ),
                   ),

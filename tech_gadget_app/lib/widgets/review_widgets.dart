@@ -242,19 +242,30 @@ class ReviewCard extends StatelessWidget {
               ),
             ],
           ),
+          if (r.isContentHidden) ...[
+            const SizedBox(height: 8),
+            _HiddenContentNotice(review: r),
+          ],
           if (r.comment != null && r.comment!.trim().isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(r.comment!, style: const TextStyle(fontSize: 14, height: 1.4)),
+            // Nội dung bị ẩn chỉ đến được tay chủ đánh giá / Admin → làm mờ để phân biệt
+            Opacity(
+              opacity: r.isContentHidden ? 0.55 : 1,
+              child: Text(r.comment!, style: const TextStyle(fontSize: 14, height: 1.4)),
+            ),
           ],
           if (r.images.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (var i = 0; i < r.images.length; i++)
-                  ReviewThumb(url: r.images[i], onTap: () => showReviewImageViewer(context, r.images, i)),
-              ],
+            Opacity(
+              opacity: r.isContentHidden ? 0.55 : 1,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (var i = 0; i < r.images.length; i++)
+                    ReviewThumb(url: r.images[i], onTap: () => showReviewImageViewer(context, r.images, i)),
+                ],
+              ),
             ),
           ],
           if (r.hasReply) ...[
@@ -293,6 +304,56 @@ class ReviewCard extends StatelessWidget {
             const SizedBox(height: 8),
             footer!,
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Thông báo nội dung đánh giá đã bị Shop ẩn.
+/// - Người xem công khai (không có nội dung gốc): chỉ báo đã ẩn.
+/// - Chủ đánh giá: lý do + hướng dẫn sửa để hiện lại.
+/// - Admin: lý do + nhắc rằng khách khác chỉ thấy số sao.
+class _HiddenContentNotice extends StatelessWidget {
+  final Review review;
+
+  const _HiddenContentNotice({required this.review});
+
+  @override
+  Widget build(BuildContext context) {
+    final r = review;
+    final hasOriginal = (r.comment != null && r.comment!.trim().isNotEmpty) || r.images.isNotEmpty;
+    final reason = (r.hiddenReason != null && r.hiddenReason!.trim().isNotEmpty) ? r.hiddenReason!.trim() : null;
+
+    final String message;
+    if (!hasOriginal && !r.isMine) {
+      message = 'Nội dung đánh giá đã bị ẩn do vi phạm tiêu chuẩn cộng đồng.';
+    } else if (r.isMine) {
+      message = 'Shop đã ẩn nội dung đánh giá của bạn${reason != null ? ' (lý do: $reason)' : ''}. '
+          'Người khác chỉ thấy số sao. Hãy sửa lại đánh giá để nội dung được hiển thị trở lại.';
+    } else {
+      message = 'Đã ẩn nội dung${reason != null ? ' – lý do: $reason' : ''}. Khách hàng khác chỉ thấy số sao.';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.visibility_off_outlined, size: 16, color: Colors.orange.shade800),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(fontSize: 12, height: 1.35, color: Colors.orange.shade900, fontStyle: FontStyle.italic),
+            ),
+          ),
         ],
       ),
     );

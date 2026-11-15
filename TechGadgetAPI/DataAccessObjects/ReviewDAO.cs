@@ -30,7 +30,8 @@ public class ReviewDAO
         }
         if (hasImages)
         {
-            query = query.Where(r => r.Images.Count > 0);
+            // Ảnh của đánh giá đã bị ẩn nội dung không được hiển thị → không tính là "có ảnh"
+            query = query.Where(r => r.Images.Count > 0 && !r.ContentHidden);
         }
 
         var total = await query.CountAsync();
@@ -56,7 +57,7 @@ public class ReviewDAO
 
         var withImages = await _context.Reviews
             .AsNoTracking()
-            .CountAsync(r => r.ProductId == productId && r.Images.Count > 0);
+            .CountAsync(r => r.ProductId == productId && r.Images.Count > 0 && !r.ContentHidden);
 
         return (counts, withImages);
     }
@@ -83,7 +84,9 @@ public class ReviewDAO
             .AsNoTracking()
             .Where(oi => oi.ProductVariant.ProductId == productId
                          && oi.Order.UserId == userId
-                         && (oi.Order.Status == OrderStatus.Completed || oi.Order.Status == OrderStatus.Delivered))
+                         // Enum order_status trong DB không có 'completed': đơn hoàn thành được lưu là 'delivered'
+                         // (xem OrderStatusMapper.ToDbStatus). Đưa Completed vào câu SQL sẽ gây lỗi 22P02.
+                         && oi.Order.Status == OrderStatus.Delivered)
             .OrderByDescending(oi => oi.Order.UpdatedAt)
             .Select(oi => new { oi.OrderId, oi.Sku })
             .FirstOrDefaultAsync();
@@ -96,7 +99,7 @@ public class ReviewDAO
         _context.OrderItems.AnyAsync(oi => oi.ProductVariant.ProductId == productId
                                            && oi.Order.UserId == userId
                                            && oi.Order.Status != OrderStatus.Cancelled
-                                           && oi.Order.Status != OrderStatus.Completed && oi.Order.Status != OrderStatus.Delivered);
+                                           && oi.Order.Status != OrderStatus.Delivered);
 
     /// <summary>Số lần khách gửi / sửa đánh giá kể từ thời điểm <paramref name="since"/> (chống spam).</summary>
     public Task<int> CountRecentSubmissionsAsync(Guid userId, DateTimeOffset since) =>
@@ -110,7 +113,7 @@ public class ReviewDAO
         var rows = await _context.OrderItems
             .AsNoTracking()
             .Where(oi => oi.Order.UserId == userId
-                         && (oi.Order.Status == OrderStatus.Completed || oi.Order.Status == OrderStatus.Delivered)
+                         && oi.Order.Status == OrderStatus.Delivered
                          && !_context.Reviews.Any(r => r.UserId == userId && r.ProductId == oi.ProductVariant.ProductId))
             .Select(oi => new
             {

@@ -36,6 +36,15 @@ public class ReviewDto
     public string? AdminReply { get; set; }
     public DateTimeOffset? RepliedAt { get; set; }
     public bool IsMine { get; set; }
+
+    /// <summary>
+    /// Nội dung đã bị Shop ẩn vì khiếm nhã. Với người xem công khai, Comment = null và Images rỗng
+    /// (server không gửi nội dung gốc). Chủ đánh giá và Admin vẫn nhận nội dung gốc để biết lý do / sửa lại.
+    /// </summary>
+    public bool IsContentHidden { get; set; }
+
+    /// <summary>Lý do ẩn – chỉ trả về cho chủ đánh giá và Admin.</summary>
+    public string? HiddenReason { get; set; }
 }
 
 public class ReviewSummaryDto
@@ -115,4 +124,13 @@ public class ReplyReviewRequest
 {
     /// <summary>Nội dung phản hồi. Để trống để gỡ phản hồi.</summary>
     public string? Reply { get; set; }
+}
+
+public class SetReviewContentVisibilityRequest
+{
+    /// <summary>true = ẩn nội dung (giữ số sao), false = hiện lại.</summary>
+    public bool Hidden { get; set; }
+
+    /// <summary>Lý do ẩn (tuỳ chọn, tối đa 200 ký tự). Bỏ qua khi hiện lại.</summary>
+    public string? Reason { get; set; }
 }
