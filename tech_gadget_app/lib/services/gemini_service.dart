@@ -85,12 +85,40 @@ class ProductAiDraft {
   });
 
   factory ProductAiDraft.fromJson(Map<String, dynamic> json) {
+    // Trích xuất an toàn basePrice từ số hoặc chuỗi định dạng (ví dụ: "34990000" hoặc "34.990.000")
+    double parsedBasePrice = 0;
+    final rawBasePrice = json['basePrice'] ?? json['price'] ?? json['base_price'] ?? json['gia'];
+    if (rawBasePrice is num) {
+      parsedBasePrice = rawBasePrice.toDouble();
+    } else if (rawBasePrice is String) {
+      final clean = rawBasePrice.replaceAll(RegExp(r'[^\d.]'), '');
+      parsedBasePrice = double.tryParse(clean) ?? 0;
+    }
+
+    double? parsedDiscountPrice;
+    final rawDiscount = json['discountPrice'] ?? json['discount_price'] ?? json['sale_price'];
+    if (rawDiscount is num) {
+      parsedDiscountPrice = rawDiscount.toDouble();
+    } else if (rawDiscount is String) {
+      final clean = rawDiscount.replaceAll(RegExp(r'[^\d.]'), '');
+      parsedDiscountPrice = double.tryParse(clean);
+    }
+
+    final name = json['name']?.toString() ?? '';
+
+    // Nếu giá nhận được vẫn <= 0, tự động ước tính giá thị trường thông minh không để 0đ
+    if (parsedBasePrice <= 0) {
+      final fallback = GeminiService.generateSmartLocalProductDraft(name.isNotEmpty ? name : 'Thiết bị công nghệ');
+      parsedBasePrice = fallback.basePrice;
+      parsedDiscountPrice ??= fallback.discountPrice;
+    }
+
     return ProductAiDraft(
-      name: json['name']?.toString() ?? '',
-      categoryHint: json['categoryHint']?.toString() ?? '',
-      brandHint: json['brandHint']?.toString() ?? '',
-      basePrice: (json['basePrice'] as num?)?.toDouble() ?? 0,
-      discountPrice: (json['discountPrice'] as num?)?.toDouble(),
+      name: name,
+      categoryHint: json['categoryHint']?.toString() ?? json['category']?.toString() ?? '',
+      brandHint: json['brandHint']?.toString() ?? json['brand']?.toString() ?? '',
+      basePrice: parsedBasePrice,
+      discountPrice: parsedDiscountPrice,
       stock: (json['stock'] as num?)?.toInt() ?? 20,
       sku: json['sku']?.toString() ?? 'TG-AI',
       description: json['description']?.toString() ?? '',

@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace BusinessObjects.DTOs;
 
 public record AiStatusResponse(bool Configured, string Model, string Message);
@@ -27,15 +29,49 @@ public class ProductRecommendationDto
 
 public class ProductDraftDto
 {
+    [JsonPropertyName("name")]
     public string Name { get; set; } = string.Empty;
+
+    [JsonPropertyName("categoryHint")]
     public string CategoryHint { get; set; } = string.Empty;
+
+    [JsonPropertyName("category")]
+    public string? CategoryAlias { set { if (string.IsNullOrWhiteSpace(CategoryHint) && !string.IsNullOrWhiteSpace(value)) CategoryHint = value; } }
+
+    [JsonPropertyName("brandHint")]
     public string BrandHint { get; set; } = string.Empty;
+
+    [JsonPropertyName("brand")]
+    public string? BrandAlias { set { if (string.IsNullOrWhiteSpace(BrandHint) && !string.IsNullOrWhiteSpace(value)) BrandHint = value; } }
+
+    [JsonPropertyName("basePrice")]
     public decimal BasePrice { get; set; }
+
+    [JsonPropertyName("discountPrice")]
     public decimal? DiscountPrice { get; set; }
+
+    [JsonPropertyName("price")]
+    public decimal? PriceAlias { set { if (BasePrice <= 0 && value.HasValue) BasePrice = value.Value; } }
+
+    [JsonPropertyName("base_price")]
+    public decimal? BasePriceSnake { set { if (BasePrice <= 0 && value.HasValue) BasePrice = value.Value; } }
+
+    [JsonPropertyName("discount_price")]
+    public decimal? DiscountPriceSnake { set { if (DiscountPrice == null && value.HasValue) DiscountPrice = value.Value; } }
+
+    [JsonPropertyName("stock")]
     public int Stock { get; set; }
+
+    [JsonPropertyName("sku")]
     public string Sku { get; set; } = string.Empty;
+
+    [JsonPropertyName("description")]
     public string Description { get; set; } = string.Empty;
+
+    [JsonPropertyName("specifications")]
     public Dictionary<string, object> Specifications { get; set; } = new();
+
+    [JsonPropertyName("source")]
     public string Source { get; set; } = "Google Gemini";
 }
 

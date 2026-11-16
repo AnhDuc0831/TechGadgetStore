@@ -828,37 +828,61 @@ class _AdminAddProductScreenState extends State<AdminAddProductScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Chọn nhanh danh mục:',
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
+        Row(
+          children: [
+            Icon(Icons.bolt, size: 14, color: Colors.deepOrange.shade600),
+            const SizedBox(width: 4),
+            Text(
+              'Chọn nhanh danh mục:',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 6),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
           child: Row(
             children: _categories.map((c) {
               final isSelected = _selectedCategoryId == c.id;
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: FilterChip(
-                  label: Text(c.name),
-                  selected: isSelected,
-                  selectedColor: Colors.orange.shade100,
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: isSelected ? Colors.deepOrange : Colors.grey.shade300,
+                      width: isSelected ? 1.5 : 1.0,
+                    ),
+                  ),
+                  backgroundColor: Colors.white,
+                  selectedColor: const Color(0xFFFFEDD5),
                   checkmarkColor: Colors.deepOrange,
+                  label: Text(
+                    c.name,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   labelStyle: TextStyle(
                     fontSize: 12,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isSelected ? Colors.deepOrange.shade900 : Colors.black87,
+                    color: isSelected ? Colors.deepOrange.shade900 : const Color(0xFF374151),
                   ),
                   onSelected: (val) {
-                    if (val) setState(() => _selectedCategoryId = c.id);
+                    if (val) {
+                      setState(() => _selectedCategoryId = c.id);
+                    }
                   },
                 ),
               );
             }).toList(),
           ),
         ),
-        const SizedBox(height: 10),
       ],
     );
   }
@@ -870,38 +894,196 @@ class _AdminAddProductScreenState extends State<AdminAddProductScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Chọn nhanh thương hiệu:',
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
+        Row(
+          children: [
+            Icon(Icons.bolt, size: 14, color: const Color(0xFF0F766E)),
+            const SizedBox(width: 4),
+            Text(
+              'Chọn nhanh thương hiệu:',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 6),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
           child: Row(
             children: _brands.map((b) {
               final isSelected = _selectedBrandId == b.id;
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: FilterChip(
-                  label: Text(b.name),
-                  selected: isSelected,
-                  selectedColor: Colors.blue.shade100,
-                  checkmarkColor: Colors.blue.shade800,
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(
+                      color: isSelected ? const Color(0xFF0F766E) : Colors.grey.shade300,
+                      width: isSelected ? 1.5 : 1.0,
+                    ),
+                  ),
+                  backgroundColor: Colors.white,
+                  selectedColor: const Color(0xFFCCFBF1),
+                  checkmarkColor: const Color(0xFF0F766E),
+                  label: Text(
+                    b.name,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   labelStyle: TextStyle(
                     fontSize: 12,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    color: isSelected ? Colors.blue.shade900 : Colors.black87,
+                    color: isSelected ? const Color(0xFF115E59) : const Color(0xFF374151),
                   ),
                   onSelected: (val) {
-                    if (val) setState(() => _selectedBrandId = b.id);
+                    if (val) {
+                      setState(() => _selectedBrandId = b.id);
+                    }
                   },
                 ),
               );
             }).toList(),
           ),
         ),
-        const SizedBox(height: 14),
       ],
+    );
+  }
+
+  /// Card phân loại Danh mục & Thương hiệu đẹp mắt, chống tràn 100%
+  Widget _buildCategoryAndBrandSection() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.deepOrange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.category_rounded, size: 18, color: Colors.deepOrange),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Phân loại & Thương hiệu',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1F2937),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: const Text(
+                  'Bắt buộc',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Dropdown Danh mục
+          DropdownButtonFormField<String>(
+            key: ValueKey('cat_$_selectedCategoryId'),
+            initialValue: _categories.any((c) => c.id == _selectedCategoryId) ? _selectedCategoryId : null,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: 'Danh mục sản phẩm *',
+              prefixIcon: const Icon(Icons.category_outlined, color: Colors.deepOrange),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.deepOrange, width: 1.5),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+            items: _categories
+                .map((c) => DropdownMenuItem(
+                      value: c.id,
+                      child: Text(
+                        c.name,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedCategoryId = v),
+            validator: (v) => v == null || v.isEmpty ? 'Vui lòng chọn danh mục' : null,
+          ),
+
+          if (_categories.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildCategoryChips(),
+          ],
+
+          const SizedBox(height: 16),
+
+          // Dropdown Thương hiệu
+          DropdownButtonFormField<String>(
+            key: ValueKey('brand_$_selectedBrandId'),
+            initialValue: _brands.any((b) => b.id == _selectedBrandId) ? _selectedBrandId : null,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: 'Thương hiệu *',
+              prefixIcon: const Icon(Icons.branding_watermark_outlined, color: Color(0xFF0F766E)),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF0F766E), width: 1.5),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+            items: _brands
+                .map((b) => DropdownMenuItem(
+                      value: b.id,
+                      child: Text(
+                        b.name,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedBrandId = v),
+            validator: (v) => v == null || v.isEmpty ? 'Vui lòng chọn thương hiệu' : null,
+          ),
+
+          if (_brands.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _buildBrandChips(),
+          ],
+        ],
+      ),
     );
   }
 
@@ -997,42 +1179,8 @@ class _AdminAddProductScreenState extends State<AdminAddProductScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Danh mục & Thương hiệu Quick Chips
-                  _buildCategoryChips(),
-                  _buildBrandChips(),
-
-                  // Dropdowns dự phòng / chi tiết
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _selectedCategoryId,
-                          decoration: const InputDecoration(
-                            labelText: 'Danh mục *',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: _categories
-                              .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
-                              .toList(),
-                          onChanged: (v) => setState(() => _selectedCategoryId = v),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _selectedBrandId,
-                          decoration: const InputDecoration(
-                            labelText: 'Thương hiệu *',
-                            border: OutlineInputBorder(),
-                          ),
-                          items: _brands
-                              .map((b) => DropdownMenuItem(value: b.id, child: Text(b.name)))
-                              .toList(),
-                          onChanged: (v) => setState(() => _selectedBrandId = v),
-                        ),
-                      ),
-                    ],
-                  ),
+                  // Phân loại & Thương hiệu (Thiết kế Card sang trọng, chống tràn 100%)
+                  _buildCategoryAndBrandSection(),
                   const SizedBox(height: 14),
 
                   // Giá gốc & Giá khuyến mãi

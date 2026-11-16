@@ -373,7 +373,11 @@ class _AdminEditProductScreenState extends State<AdminEditProductScreen> {
                               children: [
                                 Expanded(
                                   child: DropdownButtonFormField<String>(
-                                    value: _selectedCategoryId,
+                                    key: ValueKey('cat_$_selectedCategoryId'),
+                                    isExpanded: true,
+                                    initialValue: _categories.any((c) => c.id == _selectedCategoryId)
+                                        ? _selectedCategoryId
+                                        : null,
                                     decoration: const InputDecoration(
                                       labelText: 'Danh mục *',
                                       prefixIcon: Icon(Icons.category_outlined),
@@ -392,7 +396,11 @@ class _AdminEditProductScreenState extends State<AdminEditProductScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: DropdownButtonFormField<String>(
-                                    value: _selectedBrandId,
+                                    key: ValueKey('brand_$_selectedBrandId'),
+                                    isExpanded: true,
+                                    initialValue: _brands.any((b) => b.id == _selectedBrandId)
+                                        ? _selectedBrandId
+                                        : null,
                                     decoration: const InputDecoration(
                                       labelText: 'Thương hiệu *',
                                       prefixIcon: Icon(Icons.branding_watermark_outlined),

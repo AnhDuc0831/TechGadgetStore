@@ -314,7 +314,11 @@ class _AiAssistantModalState extends State<AiAssistantModal> {
                 children: [
                   const Text('Giá niêm yết:', style: TextStyle(fontSize: 9, color: Colors.grey)),
                   Text(
-                    _currencyFormat.format(draft.discountPrice ?? draft.basePrice),
+                    _currencyFormat.format(
+                      (draft.discountPrice != null && draft.discountPrice! > 0)
+                          ? draft.discountPrice
+                          : (draft.basePrice > 0 ? draft.basePrice : 25000000),
+                    ),
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w800,

@@ -376,7 +376,16 @@ NHIỆM VỤ CỦA BẠN:
 2. Trả lời chuyên nghiệp, sắc bén, định dạng Markdown đẹp mắt (dùng emoji, bullet points, in đậm số tiền, phần trăm).
 3. Đưa ra nhận xét, đánh giá tình hình kinh doanh (doanh số, tỷ lệ hủy đơn, sản phẩm bán chạy, rủi ro hết hàng kho...).
 4. Đề xuất hành động chiến lược thiết thực cho Admin (ví dụ: cần xử lý đơn chờ duyệt, kế hoạch nhập thêm hàng nào, giải pháp kích cầu...).
-5. Nếu Admin có ý định muốn đăng bài bán sản phẩm mới (chứa từ khóa 'viết bài' hoặc 'đăng sản phẩm'): Hãy tạo thêm 'productDraft' tương ứng.
+5. Nếu Admin có ý định muốn đăng bài bán sản phẩm mới (chứa từ khóa 'viết bài' hoặc 'đăng sản phẩm'): Hãy tạo thêm 'productDraft' tương ứng với đầy đủ cấu trúc:
+   • name: Tên sản phẩm
+   • categoryHint: Danh mục phù hợp (smartphones, laptops, accessories, audio, smartwatches)
+   • brandHint: Thương hiệu phù hợp (Apple, Samsung, Dell, Sony, Logitech...)
+   • basePrice: Giá gốc VNĐ theo giá thị trường thực tế (BẮT BUỘC là số nguyên dương > 0, ví dụ: 34990000, 28990000, 5490000; TUYỆT ĐỐI KHÔNG ĐỂ 0)
+   • discountPrice: Giá khuyến mãi VNĐ (ví dụ: 31990000)
+   • stock: Số lượng tồn kho (20 - 50)
+   • sku: Mã SKU (ví dụ: TG-IP16PM-256G)
+   • description: Bài viết mô tả hấp dẫn chuẩn SEO có emoji
+   • specifications: Bảng thông số kỹ thuật (man_hinh, cpu, ram, pin, bao_hanh...)
 
 TRẢ VỀ DUY NHẤT CHUỖI JSON HỢP LỆ (KHÔNG DÙNG MARKDOWN BAO NGOÀI JSON):
 {{
@@ -423,6 +432,25 @@ TRẢ VỀ DUY NHẤT CHUỖI JSON HỢP LỆ (KHÔNG DÙNG MARKDOWN BAO NGOÀI 
                             if (parsed.RootElement.TryGetProperty("productDraft", out var draftElem) && draftElem.ValueKind == JsonValueKind.Object)
                             {
                                 draft = JsonSerializer.Deserialize<ProductDraftDto>(draftElem.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                if (draft != null)
+                                {
+                                    if (draft.BasePrice <= 0)
+                                    {
+                                        if (draftElem.TryGetProperty("price", out var pEl) && pEl.TryGetDecimal(out var pVal)) draft.BasePrice = pVal;
+                                        else if (draftElem.TryGetProperty("base_price", out var bpEl) && bpEl.TryGetDecimal(out var bpVal)) draft.BasePrice = bpVal;
+                                        else if (draftElem.TryGetProperty("gia", out var gEl) && gEl.TryGetDecimal(out var gVal)) draft.BasePrice = gVal;
+                                        else
+                                        {
+                                            var fallback = GenerateLocalSmartDraft(draft.Name, categories, brands);
+                                            draft.BasePrice = fallback.BasePrice;
+                                            draft.DiscountPrice ??= fallback.DiscountPrice;
+                                        }
+                                    }
+                                    if ((draft.DiscountPrice == null || draft.DiscountPrice <= 0) && draftElem.TryGetProperty("discount_price", out var dpEl) && dpEl.TryGetDecimal(out var dpVal))
+                                    {
+                                        draft.DiscountPrice = dpVal;
+                                    }
+                                }
                             }
 
                             return new AiChatResponseDto
